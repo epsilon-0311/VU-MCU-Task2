@@ -8,12 +8,13 @@ module LunarLanderC{
   uses interface GeneralIOPort as CharPort;
   uses interface Boot;
   uses interface BufferedLcd;
+  uses interface Score;
 }
 implementation {
 
    bool shiftPressed = FALSE;
-   char outputString[64] ="";
-   uint8_t lastChar;
+   char player[32] ="";
+   uint8_t currentChar;
    
    event void Boot.booted(){
       call CharPort.makeOutput(0xFF);
@@ -24,27 +25,24 @@ implementation {
    
    task void decodeChar(){
       uint8_t chr;
-      size_t len = strlen(outputString);
+      size_t len = (strlen(player) %32);
       
       atomic{
-	chr = lastChar;
+	chr = currentChar;
       }
-      call CharPort.write(chr);
+                
       if(chr == 0x12){
 	shiftPressed = !shiftPressed;
-	//call CharPort.toggle(0xFF);
 	return;
       }
       
       if(shiftPressed){
 	uint8_t i=0;
-	call CharPort.write(chr);
 	
 	for(i=0; i< PS2CharArraySize; i++){
 	  if(chr == pgm_read_byte_near(&(shifted[i][0]))){
-	    outputString[len] = pgm_read_byte_near(&shifted[i][1]);
-	    return;
-	  }	  //pgm_read_byte_near(shifted + i)
+	    player[len] = pgm_read_byte_near(&shifted[i][1]);
+	  }
 	}
 
       }else{
@@ -52,23 +50,23 @@ implementation {
 
 	for(i=0; i< PS2CharArraySize; i++){
 	  if(chr == pgm_read_byte_near(&(unshifted[i][0]))){
-	    outputString[len] = pgm_read_byte_near(&(unshifted[i][1]));
+	    player[len] = pgm_read_byte_near(&(unshifted[i][1]));
 	  }
 	}
 	
       }
       
-      outputString[len+1] = '\0';
+      player[len+1] = '\0';
       call BufferedLcd.clear();
       call BufferedLcd.forceRefresh();
-      call BufferedLcd.write(outputString);
+      call BufferedLcd.write(player);
       call BufferedLcd.forceRefresh();
    }
    
    async event void PS2.receivedChar(uint8_t chr){   
       
       atomic{
-	lastChar = chr;
+	currentChar = chr;
       }
       post decodeChar();
    }
