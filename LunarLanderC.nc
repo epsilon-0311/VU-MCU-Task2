@@ -9,6 +9,7 @@ module LunarLanderC{
   uses interface Boot;
   uses interface BufferedLcd;
   uses interface Score;
+  uses interface Read<uint16_t> as ReadADC2;
 }
 implementation {
 
@@ -70,4 +71,9 @@ implementation {
       }
       post decodeChar();
    }
+   
+    event void ReadADC2.readDone(error_t err, uint16_t val) {
+        if (err == SUCCESS) {
+        }
+    }
 }
