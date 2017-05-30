@@ -1,17 +1,21 @@
-#define UQ_SHARED_RESOURCE   "Shared.Resource.ADC"
 
 configuration VolumeAdcC{
     provides interface Read<uint16_t>;
 }
 
 implementation{ 
-    components new AdcReadClientC() as ADC2;
+    components new AdcReadClientC() as ADC;
+    components VolumeAdcConfigC;
+    components MainC;
     components VolumeAdcP;
-    components new RoundRobinArbiterC(UQ_SHARED_RESOURCE) as Arbiter;
+    components HplAtm1280GeneralIOC;
     
-    Read = ADC2;
+    Read = ADC;
     
-    ADC2.Atm1280AdcConfig = VolumeAdcP;
-    ADC2.ResourceConfigure = Arbiter;
+    ADC.ResourceConfigure -> VolumeAdcConfigC;
+    ADC.Atm1280AdcConfig -> VolumeAdcConfigC;
+    
+    VolumeAdcP.Boot -> MainC.Boot;
+    VolumeAdcP.PortF2 -> HplAtm1280GeneralIOC.PortF2;
     
 }
