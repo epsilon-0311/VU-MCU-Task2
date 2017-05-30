@@ -1,19 +1,19 @@
 
 configuration VolumeAdcC{
-    provides interface Read<uint16_t>;
+    provides interface Read<uint16_t> as readVolume;
 }
 
 implementation{ 
-    components new AdcReadClientC() as ADC;
-    components VolumeAdcConfigC;
     components MainC;
+    components new AdcReadClientC() as volumeADC;
+    components VolumeAdcConfigC;
     components VolumeAdcP;
     components HplAtm1280GeneralIOC;
     
-    Read = ADC;
+    readVolume = volumeADC.Read;
     
-    ADC.ResourceConfigure -> VolumeAdcConfigC;
-    ADC.Atm1280AdcConfig -> VolumeAdcConfigC;
+    volumeADC.ResourceConfigure -> VolumeAdcConfigC;
+    volumeADC.Atm1280AdcConfig -> VolumeAdcConfigC;
     
     VolumeAdcP.Boot -> MainC.Boot;
     VolumeAdcP.PortF2 -> HplAtm1280GeneralIOC.PortF2;

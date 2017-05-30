@@ -17,5 +17,6 @@ implementation {
     LL.Boot -> MainC.Boot;
     LL.BufferedLcd -> BufferedLcdC;
     LL.Score -> ScoreC;
+    LL.ReadADC2 -> VolumeAdcC.readVolume;
     LL.ReadADC2 -> VolumeAdcC;
 }

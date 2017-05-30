@@ -8,7 +8,7 @@ module VolumeAdcP{
 implementation{
 
     event void Boot.booted(){
-        PortF2.makeInput();
+        call PortF2.makeInput();
         
     }
 }
