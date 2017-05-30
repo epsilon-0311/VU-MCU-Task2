@@ -1,6 +1,6 @@
 #include "Atm1280Adc.h"
 
-module VolumeAdcP{
+module RandomAdcP{
     uses interface Boot;
     uses interface GeneralIO as PortK0;
     uses interface GeneralIO as PortK1;
@@ -9,7 +9,7 @@ module VolumeAdcP{
 implementation{
 
     event void Boot.booted(){
-        PortK0.makeInput();
-        PortK1.makeInput();
+        call PortK0.makeInput();
+        call PortK1.makeInput();
     }
 }

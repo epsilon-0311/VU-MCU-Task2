@@ -1,21 +1,21 @@
 
 configuration RandomAdcC{
-    provides interface Read<uint16_t>;
+    provides interface Read<uint16_t> as readRandom;
 }
 
 implementation{ 
-    components new AdcReadClientC() as ADC;
+    components new AdcReadClientC() as randADC;
     components RandomAdcConfigC;
     components MainC;
-    components VolumeAdcP;
+    components RandomAdcP;
     components HplAtm1280GeneralIOC;
     
-    Read = ADC;
+    readRandom = randADC.Read;
     
-    ADC.ResourceConfigure -> RandomAdcConfigC;
-    ADC.Atm1280AdcConfig -> RandomAdcConfigC;
+    randADC.ResourceConfigure -> RandomAdcConfigC;
+    randADC.Atm1280AdcConfig -> RandomAdcConfigC;
     
-    VolumeAdcP.Boot -> MainC.Boot;
-    VolumeAdcP.PortK0 -> HplAtm1280GeneralIOC.PortK0;
-    VolumeAdcP.PortK1 -> HplAtm1280GeneralIOC.PortK1;
+    RandomAdcP.Boot -> MainC.Boot;
+    RandomAdcP.PortK0 -> HplAtm1280GeneralIOC.PortK0;
+    RandomAdcP.PortK1 -> HplAtm1280GeneralIOC.PortK1;
 }
