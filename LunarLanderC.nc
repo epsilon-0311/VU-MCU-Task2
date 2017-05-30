@@ -10,6 +10,7 @@ module LunarLanderC{
   uses interface BufferedLcd;
   uses interface Score;
   uses interface Read<uint16_t> as ReadADC2;
+  uses interface ParameterInit<uint32_t> as initRandom;
 }
 implementation {
 
@@ -22,6 +23,7 @@ implementation {
       call PS2.init();
       call BufferedLcd.clear();
       call BufferedLcd.forceRefresh();
+      call initRandom.init(65535UL);
    }
    
    task void decodeChar(){

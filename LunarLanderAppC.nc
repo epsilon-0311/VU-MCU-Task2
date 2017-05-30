@@ -11,6 +11,7 @@ implementation {
     components BufferedLcdC;
     components ScoreC;
     components VolumeAdcC;
+    components RandomC;
 
     LL.PS2 -> PS2C;
     LL.CharPort -> PortA.GeneralIOPort;
@@ -18,5 +19,5 @@ implementation {
     LL.BufferedLcd -> BufferedLcdC;
     LL.Score -> ScoreC;
     LL.ReadADC2 -> VolumeAdcC.readVolume;
-    LL.ReadADC2 -> VolumeAdcC;
+    LL.initRandom -> RandomC.ParamInit;
 }
