@@ -7,7 +7,7 @@ module RandomP{
 
 implementation{
     
-    uint16_t LFSR=0; 
+    uint32_t LFSR=0; 
     
     /**
     * Initialize this component. Initialization should not assume that
@@ -28,7 +28,7 @@ implementation{
      * @return Returns the 32-bit pseudorandom number.
      */
     async command uint32_t Random.rand32(){
-        
+        return LFSR;
     }
 
     /** 
@@ -36,7 +36,7 @@ implementation{
      * @return Returns low 16 bits of the pseudorandom number.
      */
     async command uint16_t Random.rand16(){
-        
+        return (uint16_t)(LFSR & 0xFFFF);
     }
     
     event void Timer.fired() {
