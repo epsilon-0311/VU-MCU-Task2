@@ -28,7 +28,7 @@ implementation{
       bool clockValue = call Clock.get();
       if(clockValue==0){
 	bool charData = call Data.get();
-	//status = (status <<1) | charData;
+
 	status = (status >> 1) | (charData << 10);
 	counter = (counter+1)%11;
 	
@@ -47,7 +47,7 @@ implementation{
 	}
 
       }
-      call Data.toggle();
+      //call Data.toggle();
   }
 
 }
