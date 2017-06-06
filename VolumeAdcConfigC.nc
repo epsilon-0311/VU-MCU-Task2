@@ -47,6 +47,6 @@ implementation{
     *   ATM1280_ADC_PRESCALE_xxx values from Atm1280Adc.h.
     */
     async command uint8_t Atm1280AdcConfig.getPrescaler(){
-        return ATM1280_ADC_PRESCALE_2;
+        return ATM1280_ADC_PRESCALE_32;
     }
 }
