@@ -9,8 +9,11 @@ module LunarLanderC{
   uses interface Boot;
   uses interface BufferedLcd;
   uses interface Score;
-  uses interface Read<uint16_t> as ReadADC2;
+  uses interface Read<uint16_t> as ReadVolume;
   uses interface ParameterInit<uint32_t> as initRandom;
+
+  //DEBUG
+  uses interface Timer<TMilli> as DebugTimer;
 }
 implementation {
 
@@ -24,6 +27,8 @@ implementation {
       call BufferedLcd.clear();
       call BufferedLcd.forceRefresh();
       call initRandom.init(65535UL);
+      
+      call DebugTimer.startPeriodic(10);
    }
    
    task void decodeChar(){
@@ -60,10 +65,10 @@ implementation {
       }
       
       player[len+1] = '\0';
-      call BufferedLcd.clear();
-      call BufferedLcd.forceRefresh();
-      call BufferedLcd.write(player);
-      call BufferedLcd.forceRefresh();
+//       call BufferedLcd.clear();
+//       call BufferedLcd.forceRefresh();
+//       call BufferedLcd.write(player);
+//       call BufferedLcd.forceRefresh();
    }
    
    async event void PS2.receivedChar(uint8_t chr){   
@@ -74,8 +79,20 @@ implementation {
       post decodeChar();
    }
    
-    event void ReadADC2.readDone(error_t err, uint16_t val) {
-        if (err == SUCCESS) {
+    event void ReadVolume.readDone(error_t err, uint16_t val) {
+        
+        if (err == SUCCESS) {            
+            char buffer[sizeof(uint16_t) * 4 + 1];
+            sprintf(buffer, "%d", val);
+            
+            call BufferedLcd.clear();
+            call BufferedLcd.forceRefresh();
+            call BufferedLcd.write(buffer);
+            call BufferedLcd.forceRefresh();
         }
+    }
+    
+    event void DebugTimer.fired() {
+        call ReadVolume.read();        
     }
 }
