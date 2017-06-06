@@ -25,6 +25,6 @@ implementation {
     LL.initRandom -> RandomC.ParamInit;
     
     //debug
-    //LL.Random -> RandomC.Random;
+    LL.Random -> RandomC.Random;
     LL.DebugTimer -> Timer;
 }

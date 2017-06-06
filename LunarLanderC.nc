@@ -14,6 +14,7 @@ module LunarLanderC{
 
   //DEBUG
   uses interface Timer<TMilli> as DebugTimer;
+  uses interface Random;
 }
 implementation {
 
@@ -26,9 +27,9 @@ implementation {
       call PS2.init();
       call BufferedLcd.clear();
       call BufferedLcd.forceRefresh();
-      call initRandom.init(65535UL);
+      call initRandom.init(10);
       
-      call DebugTimer.startPeriodic(10);
+      call DebugTimer.startPeriodic(1000);
    }
    
    task void decodeChar(){
@@ -82,17 +83,23 @@ implementation {
     event void ReadVolume.readDone(error_t err, uint16_t val) {
         
         if (err == SUCCESS) {            
-            char buffer[sizeof(uint16_t) * 4 + 1];
-            sprintf(buffer, "%d", val);
-            
-            call BufferedLcd.clear();
-            call BufferedLcd.forceRefresh();
-            call BufferedLcd.write(buffer);
-            call BufferedLcd.forceRefresh();
+//             char buffer[sizeof(uint16_t) * 4 + 1];
+//             sprintf(buffer, "%d", val);
+//             
+//             call BufferedLcd.clear();
+//             call BufferedLcd.forceRefresh();
+//             call BufferedLcd.write(buffer);
+//             call BufferedLcd.forceRefresh();
         }
     }
     
     event void DebugTimer.fired() {
-        call ReadVolume.read();        
+        //call ReadVolume.read();  
+        char buffer[sizeof(uint16_t) * 4 + 1];
+        sprintf(buffer, "%d", call Random.rand16());
+        call BufferedLcd.clear();
+        call BufferedLcd.forceRefresh();
+        call BufferedLcd.write(buffer);
+        call BufferedLcd.forceRefresh();
     }
 }
