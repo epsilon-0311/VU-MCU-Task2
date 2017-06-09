@@ -14,6 +14,7 @@ module LunarLanderC{
     uses interface Glcd as GLCD;
     uses interface TouchScreen;
     uses interface TerrainGenerator as TG;
+    uses interface MP3;    
     
     //DEBUG
     uses interface Timer<TMilli> as DebugTimer;
@@ -37,6 +38,7 @@ implementation {
       
       call GLCD.fill(0x00);
       call DebugTimer.startPeriodic(1000);
+      //call MP3.sineTest(TRUE);
    }
 
    task void decodeChar(){
@@ -112,15 +114,6 @@ implementation {
             uint8_t slope = (terrainSeed[seed_counter +1] - terrainSeed[seed_counter])/(16);
             
             for(x_part =0; x_part < TERRAIN_POINTS-1; x_part++){
-                          
-                          
-//                 if(slope ==0 || x ==0){
-//                     call GLCD.drawLine(x,63,x, 64-terrainSeed[seed_counter]);
-//                 }else if(slope>0){
-//                     call GLCD.drawLine(x,63,x, 64-(terrainSeed[seed_counter]+x_part*slope));
-//                 }else if(slope <0){
-//                     call GLCD.drawLine(x,63,x, 64+(terrainSeed[seed_counter] +x_part*slope));
-//                 }
 
                 uint8_t y =63-((terrainSeed[seed_counter] +(x_part*slope)));
                 
@@ -138,12 +131,19 @@ implementation {
             }
             if(x >= 128){
                 break;
-            }
-            //call GLCD.drawLine(x,63,x, 64-terrainSeed[seed_counter +1]);
-            //x++;        
+            } 
             
             
         }
+        
+    }
+    
+    /**
+        * Notification that sending data completed
+        *
+        * @param error SUCCESS if sending completed successfully
+        */
+    event void MP3.sendDone(error_t error){
         
     }
     

@@ -13,6 +13,7 @@ implementation {
     components RandomC;
     components TouchScreenC;
     components TerrainGeneratorC;
+    components VS1011eC;
     
     //DEBUG
     components new HplAtm1280GeneralIOFastPortP((uint16_t)&PORTA, (uint16_t)&DDRA, (uint16_t)&PINA) as PortA;
@@ -28,7 +29,7 @@ implementation {
     LL.GLCD -> TouchScreenC.Glcd;
     LL.TouchScreen -> TouchScreenC.TouchScreen;
     LL.TG -> TerrainGeneratorC;
-    
+    LL.MP3 -> VS1011eC;
     
     //debug
     LL.Random -> RandomC.Random;
