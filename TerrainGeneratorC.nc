@@ -7,5 +7,5 @@ implementation{
     
     TerrainGenerator = TerrainGeneratorP;
     
-    TerrainGenerator.Random -> RandomC.Random;
+    TerrainGeneratorP.Random -> RandomC;
 }

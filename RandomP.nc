@@ -53,7 +53,7 @@ implementation{
         
         for(i=0; i < 16; i++){
             random_value = random_value <<1;
-            random_value |=(0x01 & rand_shift(0));
+            random_value |=rand_shift((random_value>>1)&0x01);
         }
         return random_value;
     }

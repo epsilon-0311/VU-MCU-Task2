@@ -11,6 +11,8 @@ implementation {
     components ScoreC;
     components VolumeAdcC;
     components RandomC;
+    components TouchScreenC;
+    components TerrainGeneratorC;
     
     //DEBUG
     components new HplAtm1280GeneralIOFastPortP((uint16_t)&PORTA, (uint16_t)&DDRA, (uint16_t)&PINA) as PortA;
@@ -23,6 +25,10 @@ implementation {
     LL.Score -> ScoreC;
     LL.ReadVolume -> VolumeAdcC.readVolume;
     LL.initRandom -> RandomC.ParamInit;
+    LL.GLCD -> TouchScreenC.Glcd;
+    LL.TouchScreen -> TouchScreenC.TouchScreen;
+    LL.TG -> TerrainGeneratorC;
+    
     
     //debug
     LL.Random -> RandomC.Random;
