@@ -144,5 +144,4 @@ uint8_t const PROGMEM shifted[][2] = {
 {0,0}
 };
 
-
 #endif

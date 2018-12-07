@@ -1,7 +1,7 @@
-MATRNR = 333333
+MATRNR = 01525189
 PROTO_FOLDER=Protocol
-APP_FOLDER=LunarLander
+APP_FOLDER=RadioScanner
 
-COMPONENT=LunarLanderAppC
+COMPONENT=RadioScannerAppC
 TINYOS_ROOT_DIR?=../..
 include $(TINYOS_ROOT_DIR)/Makefile.include

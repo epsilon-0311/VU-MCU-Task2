@@ -2,13 +2,12 @@
 
 module VolumeAdcP{
     uses interface Boot;
-    uses interface GeneralIO as PortF2;
+    uses interface GeneralIO as PortF0;
 }
 
 implementation{
 
     event void Boot.booted(){
-        call PortF2.makeInput();
-        
+        call PortF0.makeInput();
     }
 }

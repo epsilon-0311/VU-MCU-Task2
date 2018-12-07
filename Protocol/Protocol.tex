@@ -69,9 +69,8 @@
 %***************************************************************************
 \noindent
 \textbf{Note:} This template is provided to show you how \LaTeX{} works and may
-not contain all subsections your protocol should contain.\\
-\textbf{Note:} You can, and in fact should, reuse appropriate parts
-from the implementation proposal in the protocol.
+not contain all subsections your protocol should contain.
+
 
 
 %***************************************************************************
@@ -81,7 +80,7 @@ from the implementation proposal in the protocol.
 %---------------------------------------------------------------------------
 \subsection{Connections,  External Pullups/Pulldowns}
 %---------------------------------------------------------------------------
-
+Example:
 \bConnections{What}{}
 PORTC & external Pulldown enabled on PC0,3-5,7 \\
 J12 & Connected to VCC \\
@@ -124,16 +123,8 @@ Describe your application.
 Explain your modules.
 
 %***************************************************************************
-\section{Physics}
+\section{FMCLick}
 %***************************************************************************
-
-%***************************************************************************
-\section{Game Inputs}
-%***************************************************************************
-
-%---------------------------------------------------------------------------
-\subsection{GamePad/LSM303}
-%---------------------------------------------------------------------------
 
 %---------------------------------------------------------------------------
 \subsection{PS/2}
@@ -182,90 +173,11 @@ Estimate the work you put into solving the Application.
 %***************************************************************************
 \section{Theory Tasks}
 %***************************************************************************
-
+Copy the theory task specification from the app 2 specification!
 
 % Your answers should be brief but complete
 
-\emph{%
-In the theory task we want you to develop argumentation skills that
-     allow you to reason about the problem you have to solve, and the
-     solution you are designing.
-Clear presentation of ideas is crucial for communication with team
-     members, bosses, customers, etc.
-This time we want you to prove your answers mathematically (e.g., by
-     contradiction or induction).
-Points are solely awarded for proper mathematical argumentation.}
 
-A fleet of $n$ landers is orbiting moon at the equator.
-The landers constitute a logical ring that serves as a communication
-     network, and each participant may communicate exclusively by
-     sending packets to its right neighbor and receiving from its left
-     neighbor.
-Each lander has a unique identifier, nodeID.
-Moreover, it can check its remaining fuel.
-
-The fleet should autonomously decide who lands first, depending on the
-     remaining fuel.
-For that, we assume that the lander with the most fuel serves as a
-     controller.
-
-The algorithm proceeds by sending packets that are lists of
-messages. We have two kinds of messages:
-\begin{itemize}
-\item \texttt{(nodeID,fuel)}, where \texttt{nodeID} is the ID of a lander, and
-\texttt{fuel} represents the remaining fuel of a lander.
-\item \texttt{(nodeID,LAND)}, where \texttt{LAND} is a special symbol
-  (indicating that the node with identifier \texttt{nodeID} should land next).
-\end{itemize}
-
-The controller sends a packet containing a list (of length 1), that
-     contains the message \texttt{(nodeID,fuel)}, to its right
-     neighbor.
-Upon receiving a packet, a non-controller lander checks its local
-     fuel, appends the message \texttt{(nodeID,fuel)} to the received
-     packet, and forwards it to its right neighbor.
-If the controller node receives a packet, it checks for the lowest
-     fuel and sends the packet \texttt{(nodeID,LAND)} with the
-     corresponding nodeID to its right neighbor (this packet contains
-     one message).
-If a non-controller lander receives \texttt{(nodeID,LAND)} from its
-     left neighbor, it forwards it to its right neighbor.
-If, in addition, \texttt{nodeID} matches its own nodeID, it lands.
-We say the algorithm is terminated when  \texttt{(nodeID,LAND)}
-     reaches the controller.
-
-\QuText{%
-	[2 Points] One landing:
-	How many messages are sent globally (by all processes) until the algorithm
-		terminates?
-	Prove by induction!
-	(Note: if a packet contains $\ell$ messages, by
-		appending a message, one obtains a packet that contains $\ell+1$
-		messages.
-	We are interested in the number of \emph{messages} sent).
-}
-
-
-\QuText{%
-	[1 Point] Improvement:
-	Give a distributed algorithm with better asymptotic message complexity!
-	As in the original algorithm, one of the landers with the least fuel
-		should land.
-	Provide instructions (what packets to send, etc.) for the controller and
-		the other landers.
-	As in the original, the code for the controller and the lander may be
-		different.
-	Prove that your algorithm is better!
-}
-
-\QuText{%
-	[2 Points] Landing Fleet:
-	Starting with a fleet of $n$ landers, the above process is repeated $n$
-	times.
-	How many messages are sent globally (by all processes) until the $n$
-	iterations terminate? Prove for the original algorithm and for your
-	solution!
-}
 
 
 %***************************************************************************

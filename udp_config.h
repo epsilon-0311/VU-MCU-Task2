@@ -14,8 +14,8 @@
 #define GATEWAY	10,60,0,1
 
 // Memory Pool Settings
-#define MAX_MSG_LEN		32
-#define MSG_POOL_SIZE	32
+#define MAX_MSG_LEN	128
+#define MSG_POOL_SIZE 128
 
 typedef struct udp_msg {
 	uint8_t data[MAX_MSG_LEN];
