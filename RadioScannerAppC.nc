@@ -5,7 +5,7 @@ configuration RadioScannerAppC {
 
 implementation {
 	components MainC;
-    components RadioScanner as RS;
+    components RadioScannerC as RS;
     components PS2C;
     components BufferedLcdC;
     components VolumeAdcC;
