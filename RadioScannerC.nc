@@ -5,6 +5,7 @@ module RadioScannerC{
     uses interface PS2;
     uses interface Boot;
     uses interface BufferedLcd;
+    uses interface FMClick;
     uses interface Read<uint16_t> as ReadVolume;
 }
 implementation {
@@ -18,6 +19,7 @@ implementation {
         call PS2.init();
         call BufferedLcd.clear();
         call BufferedLcd.forceRefresh();
+        call FMClick.init();
 
         current_line = 0;
         char_pos = 0;
@@ -78,6 +80,21 @@ implementation {
     }
 
     event void ReadVolume.readDone(error_t err, uint16_t val) {
+
+    }
+    
+    event void FMClick.initDone(error_t res)
+    {
+
+    }
+
+    async event void FMClick.tuneComplete(uint16_t channel)
+    {
+
+    }
+
+    async event void FMClick.rdsReceived(RDSType type, char *buf)
+    {
 
     }
 }
