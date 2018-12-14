@@ -28,6 +28,8 @@ implementation {
     void task display_char ()
     {
         char chr[2];
+        uint16_t temp;
+
         chr[1]='\0';
         atomic
         {
@@ -69,6 +71,10 @@ implementation {
             char_pos%=16;
         }
         call BufferedLcd.forceRefresh();
+
+        temp = call FMClick.getChannel();
+        call FMClick.tune(temp+2);
+
     }
 
     async event void PS2.receivedChar(uint8_t chr){
@@ -77,12 +83,13 @@ implementation {
             new_char = chr;
         }
         post display_char();
+
     }
 
     event void ReadVolume.readDone(error_t err, uint16_t val) {
 
     }
-    
+
     event void FMClick.initDone(error_t res)
     {
 
