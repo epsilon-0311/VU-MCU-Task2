@@ -114,7 +114,7 @@ implementation
 
             conf_registers.power_conf.SEEK = 1;
             conf_registers.power_conf.SEEKUP = up;
-            conf_registers.power_conf.SKMODE=0;
+
             post write_conf_to_chip_task();
         }
 
@@ -246,10 +246,12 @@ implementation
     {
 
         FMClick_init_state_t init_state_temp;
+        FMClick_operation_t current_operation_temp;
 
         atomic
         {
             init_state_temp = init_state;
+            current_operation_temp = current_operation;
             i2c_in_use=FALSE;
         }
 
@@ -257,10 +259,12 @@ implementation
         {
             call Timer.startOneShot(1);
         }
-
-        if(debug_read)
+        else if(current_operation_temp == FM_CLICK_WAIT_WRITE_FINISH)
         {
-            post get_registers_task();
+            atomic
+            {
+                current_operation = FM_CLICK_IDLE;
+            }
         }
     }
 
@@ -296,7 +300,7 @@ implementation
 
             post send_initial_conf_task();
         }
-        else if(current_operation_temp != FM_CLICK_IDLE)
+        else if(length==12)
         {
             uint8_t i =0;
 
@@ -308,17 +312,36 @@ implementation
             switch(current_operation_temp)
             {
                 case FM_CLICK_IDLE: // nothing to do
+                case FM_CLICK_WAIT_WRITE_FINISH:
                     break;
                 case FM_CLICK_SEEK:
-                    conf_registers.power_conf.SEEK=0;
-                    conf_registers.channel.CHANNEL_H = data_registers.read_channel.CHANNEL_H;
-                    conf_registers.channel.CHANNEL_L = data_registers.read_channel.CHANNEL_L;
+                    if(data_registers.rssi.STC)
+                    {
 
-                    post write_conf_to_chip_task();
+                        conf_registers.channel.CHANNEL_H = data_registers.read_channel.CHANNEL_H;
+                        conf_registers.channel.CHANNEL_L = data_registers.read_channel.CHANNEL_L;
+
+                        conf_registers.power_conf.SEEK=0;
+
+                        post write_conf_to_chip_task();
+
+                        atomic
+                        {
+                            current_operation = FM_CLICK_WAIT_WRITE_FINISH;
+                        }
+                    }
                     break;
                 case FM_CLICK_TUNE:
-                    conf_registers.channel.TUNE=0;
-                    post write_conf_to_chip_task();
+                    if(data_registers.rssi.STC)
+                    {
+                        conf_registers.channel.TUNE=0;
+                        post write_conf_to_chip_task();
+
+                        atomic
+                        {
+                            current_operation = FM_CLICK_WAIT_WRITE_FINISH;
+                        }
+                    }
                     break;
             }
 
@@ -342,7 +365,6 @@ implementation
 
         if(current_operation_temp != FM_CLICK_IDLE || conf_registers.system_configuration_1.RDS)
         {
-
             post get_data_from_chip_task();
         }
     }
@@ -392,13 +414,26 @@ implementation
             case FM_CLICK_INIT_DONE:
                 atomic
                 {
+                    conf_registers.power_conf.SKMODE=0;
+
                     conf_registers.system_configuration_1.GPIO2=1; // enable interrupt pin
                     conf_registers.system_configuration_1.DE=1; // set De-emphasis for Europe
                     conf_registers.system_configuration_1.RDSIEN = 1; // end RDS interrupt
                     conf_registers.system_configuration_1.STCIEN = 1; // enable Tune/Seek interrupt
-                    conf_registers.system_configuration_2.SPACE=1; // set spacing for Europe
 
+                    conf_registers.system_configuration_2.SPACE  = 1; // set spacing for Europe
+
+                    // configuration for seeking channels, see AN248
+                    // http://read.pudn.com/downloads159/doc/710424/AN284Rev0_1.pdf
+                    conf_registers.system_configuration_2.SEEKTH = 0x19;
+                    conf_registers.system_configuration_3.SKSNR = 0x4;
+                    conf_registers.system_configuration_3.SKCNT = 0x8;
+
+                    // implementation temp 
                     conf_registers.system_configuration_2.VOLUME = 0xF;
+                    conf_registers.system_configuration_1.RDS = 1; // enable RDS
+
+
                 }
                 post write_conf_to_chip_task();
                 break;

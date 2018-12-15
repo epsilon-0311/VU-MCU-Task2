@@ -173,4 +173,5 @@ typedef enum
     FM_CLICK_IDLE,
     FM_CLICK_SEEK,
     FM_CLICK_TUNE,
+    FM_CLICK_WAIT_WRITE_FINISH,
 } FMClick_operation_t;
