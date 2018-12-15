@@ -5,7 +5,7 @@
 #define PS2P_SCANTABLE_LENGHT 68
 #define PS2P_LEFT_SHIFT 0x12
 #define PS2P_RIGHT_SHIFT 0x59
-#define PS2P_BACLSPACE 0x66
+#define PS2P_BACKSPACE 0x66
 #define PS2P_KEY_RELEASED 0xF0 // 0xF0 scan code for key released
 
 
@@ -68,7 +68,7 @@ implementation{
         else
         {
 
-            if(statusTmp == PS2P_BACLSPACE) // backspace
+            if(statusTmp == PS2P_BACKSPACE) // backspace
             {
                 signal PS2.receivedChar(127);
             }
