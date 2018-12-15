@@ -80,6 +80,18 @@ typedef union __power_conf
     uint8_t data_bytes[2];
 } power_conf_t;
 
+typedef union __test_1
+{
+    struct
+    {
+        uint8_t Reserved_1    : 6; // Bits 8:13
+        uint8_t AHIZEN        : 1; // Bit 14
+        uint8_t XOSCEN        : 1; // Bit 15
+        uint8_t Reserved_2    : 8; // Bits 0:7
+    };
+    uint8_t data_bytes[2];
+} test_1_t;
+
 typedef union __rssi_status
 {
     struct
@@ -96,19 +108,26 @@ typedef union __rssi_status
     uint8_t data_bytes[2];
 } rssi_status_t;
 
-typedef union __test_1
+typedef union __read_chan
 {
     struct
     {
-        uint8_t Reserved_1    : 6; // Bits 8:13
-        uint8_t AHIZEN        : 1; // Bit 14
-        uint8_t XOSCEN        : 1; // Bit 15
-        uint8_t Reserved_2    : 8; // Bits 0:7
+        uint8_t CHANNEL_H   : 2; // Bits 8:9
+        uint8_t BLERB       : 2; // Bits 10:11
+        uint8_t BLERC       : 2; // Bits 12:13
+        uint8_t BLERD       : 2; // Bits 14:15
+        uint8_t CHANNEL_L   : 8; // Bits 0:7
     };
     uint8_t data_bytes[2];
-} test_1_t;
+} read_chan_t;
 
-typedef union __registers
+typedef union __rds
+{
+    uint16_t data;
+    uint8_t data_bytes[2];
+} rds_t;
+
+typedef union __conf_registers
 {
     struct
     {
@@ -123,13 +142,20 @@ typedef union __registers
 
 } conf_registers_t;
 
-typedef enum {
-    FM_CLICK_INIT,
-	FM_CLICK_READ_RSSI,
-    FM_CLICK_READ_SEEK,
-    FM_CLICK_READ_RDS,
-    FM_CLICK_READ_DONE,
-} FMClick_read_state_t;
+typedef union __data_registers
+{
+    struct
+    {
+        rssi_status_t rssi;
+        read_chan_t read_channel;
+        rds_t rdsa;
+        rds_t rdsb;
+        rds_t rdsc;
+        rds_t rdsd;
+    };
+    uint8_t data_bytes[12];
+
+} data_registers_t;
 
 typedef enum {
     FM_CLICK_RST_LOW,
@@ -140,3 +166,11 @@ typedef enum {
     FM_CLICK_INIT_DONE,
 
 } FMClick_init_state_t;
+
+
+typedef enum
+{
+    FM_CLICK_IDLE,
+    FM_CLICK_SEEK,
+    FM_CLICK_TUNE,
+} FMClick_operation_t;
