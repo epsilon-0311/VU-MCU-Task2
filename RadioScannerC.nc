@@ -72,8 +72,9 @@ implementation {
         }
         call BufferedLcd.forceRefresh();
 
-        temp = call FMClick.getChannel();
-        call FMClick.tune(temp+2);
+        /* temp = call FMClick.getChannel(); */
+        /* call FMClick.seek(FALSE); */
+        call FMClick.tune(511);
 
     }
 
