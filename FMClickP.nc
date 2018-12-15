@@ -1,4 +1,5 @@
 
+#include <avr/pgmspace.h>
 #include "FMClick.h"
 
 #define device_address 0x10
@@ -9,6 +10,23 @@
 #define register_SYSCONFIG3 0x06
 #define register_TEST1 0x07
 #define register_STATUS_RSSI 0x0A
+
+#define RDS_TYPE_TUNING 0x0
+#define RDS_TYPE_RADIO_TEXT 0x2
+#define RDS_TYPE_TIME 0x4
+
+#define RDS_STATION_LENGTH 2
+#define RDS_TEXT_LENGTH 4
+
+#define START_YEAR 2018
+#define MJD_1ST_JANUARY_2018 58119u
+#define LEAP_YEAR_DISTANCE 4
+#define NEXT_LEAP_YEAR 2
+#define DAYS_IN_YEAR 365
+#define DAYS_IN_LEAP_YEAR 366
+#define MONTHS_IN_YEAR 12
+#define LEAP_MONTH 1 // starting at 0
+#define LEAP_MONTH_DAYS 29
 
 module FMClickP{
     uses interface I2CPacket<TI2CBasicAddr> as I2C;
@@ -42,6 +60,8 @@ implementation
     bool i2c_in_use;
 
     bool debug_read;
+
+    uint8_t const PROGMEM days_of_month[] = {31,28,31,30,31,30,31,31,30,31,30,31};
 
     command void FMClick.init(void)
     {
@@ -234,6 +254,146 @@ implementation
 
     void task rds_task()
     {
+        RDSType rds;
+        uint8_t group_type;
+        data_registers_t data_registers_temp;
+
+        atomic
+        {
+            data_registers_temp =  data_registers;
+        }
+
+
+        group_type = (data_registers_temp.rdsb.data >> 12);
+        call debug_out.clear(0xFF);
+
+        switch (group_type)
+        {
+            case RDS_TYPE_TUNING:
+                rds = PS;
+                break;
+            case RDS_TYPE_RADIO_TEXT:
+                rds = RT;
+                break;
+            case RDS_TYPE_TIME:
+                if( ! (data_registers_temp.rdsb.data & 0x0800))
+                {
+                    rds = TIME;
+                }
+                else
+                {
+                    return;
+                }
+                break;
+            default:
+                return;
+        }
+        if(rds==TIME)
+        {
+            /* uint32_t MJD = (data_registers_temp.rdsb.data ) & 0x03; // Modified Julanian day
+            uint16_t current_year = START_YEAR;
+            uint8_t current_month =0;
+            uint8_t current_day =0;
+            bool is_leap_year = FALSE;
+            uint8_t counter=NEXT_LEAP_YEAR;
+
+            MJD <<=16;
+            MJD |= data_registers_temp.rdsc.data ;
+            MJD >>=1; // Now we have a 17 bit date format
+            MJD -= MJD_1ST_JANUARY_2018; // normalize to 1st january of 2018
+
+            while( MJD >= DAYS_IN_YEAR)
+            {
+                counter++;
+                counter %= LEAP_YEAR_DISTANCE;
+
+                if(counter==0) // check if current year is a leap year
+                {
+                    MJD-=DAYS_IN_YEAR;
+                    is_leap_year = TRUE;
+                }
+                else if(is_leap_year) // check if last year was a leap year
+                {
+                    MJD-=DAYS_IN_LEAP_YEAR;
+                    is_leap_year = FALSE;
+                }
+                else
+                {
+                    MJD-=DAYS_IN_YEAR;
+                    is_leap_year = FALSE;
+                }
+                current_year++;
+            }
+
+            for(counter=0; counter < MONTHS_IN_YEAR;counter++)
+            {
+                uint8_t days = pgm_read_byte(&(days_of_month[counter]));
+                if(is_leap_year && counter == LEAP_MONTH)
+                {
+                    if(MJD >= LEAP_MONTH_DAYS)
+                    {
+                        MJD -= LEAP_MONTH_DAYS;
+                    }
+                    else
+                    {
+                        current_month=counter+1;
+                        current_day = MJD+1;
+                        break;
+                    }
+                }
+                else if(MJD > days)
+                {
+                    MJD -= days;
+                }
+                else
+                {
+                    current_month=counter+1;
+                    current_day = MJD+1;
+                    break;
+                }
+            } */
+        }
+        else if(rds == RT)
+        {
+            /* char rds_buffer[RDS_TEXT_LENGTH+1];
+
+            uint8_t index = (data_registers_temp.rdsb.data ) & 0x0F;
+
+            if( data_registers_temp.rdsb.data & 0x0800)
+            {
+                index <<= 1;
+                rds_buffer[0] = index;
+                rds_buffer[1] = data_registers_temp.rdsc.data_bytes[0];
+                rds_buffer[2] = data_registers_temp.rdsc.data_bytes[1];
+                rds_buffer[3] = '\0';
+            }
+            else
+            {
+                index <<= 2;
+                rds_buffer[0] = index;
+                rds_buffer[1] = data_registers_temp.rdsc.data_bytes[0];
+                rds_buffer[2] = data_registers_temp.rdsc.data_bytes[1];
+                rds_buffer[3] = data_registers_temp.rdsd.data_bytes[0];
+                rds_buffer[4] = data_registers_temp.rdsd.data_bytes[1];
+            }
+
+            signal FMClick.rdsReceived(rds, rds_buffer); */
+        }
+        else
+        {
+            char rds_buffer[RDS_STATION_LENGTH+2];
+
+            uint8_t index = (data_registers_temp.rdsb.data_bytes[1] ) & 0x03;
+
+            index <<= 1;
+            rds_buffer[0] = index;
+            rds_buffer[1] = data_registers_temp.rdsd.data_bytes[0]&0x7F;
+            rds_buffer[2] = data_registers_temp.rdsd.data_bytes[1]&0x7F;
+            rds_buffer[3] = '\0';
+
+            call debug_out.set(data_registers_temp.rdsb.data_bytes[1] );
+            signal FMClick.rdsReceived(rds, rds_buffer);
+        }
 
     }
 
@@ -317,6 +477,7 @@ implementation
                 case FM_CLICK_SEEK:
                     if(data_registers.rssi.STC)
                     {
+                        uint16_t channel;
 
                         conf_registers.channel.CHANNEL_H = data_registers.read_channel.CHANNEL_H;
                         conf_registers.channel.CHANNEL_L = data_registers.read_channel.CHANNEL_L;
@@ -329,11 +490,18 @@ implementation
                         {
                             current_operation = FM_CLICK_WAIT_WRITE_FINISH;
                         }
+                        channel = conf_registers.channel.CHANNEL_H;
+                        channel <<= 8;
+                        channel |= conf_registers.channel.CHANNEL_L;
+
+                        signal FMClick.tuneComplete(channel);
                     }
                     break;
                 case FM_CLICK_TUNE:
                     if(data_registers.rssi.STC)
                     {
+                        uint16_t channel;
+
                         conf_registers.channel.TUNE=0;
                         post write_conf_to_chip_task();
 
@@ -341,6 +509,12 @@ implementation
                         {
                             current_operation = FM_CLICK_WAIT_WRITE_FINISH;
                         }
+
+                        channel = conf_registers.channel.CHANNEL_H;
+                        channel <<= 8;
+                        channel |= conf_registers.channel.CHANNEL_L;
+
+                        signal FMClick.tuneComplete(channel);
                     }
                     break;
             }
@@ -429,13 +603,16 @@ implementation
                     conf_registers.system_configuration_3.SKSNR = 0x4;
                     conf_registers.system_configuration_3.SKCNT = 0x8;
 
-                    // implementation temp 
+                    // implementation temp
                     conf_registers.system_configuration_2.VOLUME = 0xF;
                     conf_registers.system_configuration_1.RDS = 1; // enable RDS
 
 
                 }
                 post write_conf_to_chip_task();
+
+                signal FMClick.initDone(SUCCESS);
+
                 break;
         }
 
