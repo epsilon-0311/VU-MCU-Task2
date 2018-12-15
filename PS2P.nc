@@ -3,6 +3,11 @@
 #include "scancodes.h"
 
 #define PS2P_SCANTABLE_LENGHT 68
+#define PS2P_LEFT_SHIFT 0x12
+#define PS2P_RIGHT_SHIFT 0x59
+#define PS2P_BACLSPACE 0x66
+#define PS2P_KEY_RELEASED 0xF0 // 0xF0 scan code for key released
+
 
 module PS2P{
     uses interface GeneralIO as Clock;
@@ -42,26 +47,28 @@ implementation{
             status=0;
         }
 
-        if(statusTmp == 0x59 || statusTmp == 0x12) // shift pressed
+        if(statusTmp == PS2P_RIGHT_SHIFT || statusTmp == PS2P_LEFT_SHIFT) // shift pressed
         {
-          if(ignore_next)
-          {
-              shift_pressed=FALSE;
-              ignore_next = FALSE;
-          }
-          else
-          {
-              shift_pressed=TRUE;
-          }
+            if(ignore_next)
+            {
+                shift_pressed=FALSE;
+                ignore_next = FALSE;
+            }
+            else
+            {
+                shift_pressed=TRUE;
+            }
         }
         else if(ignore_next){ // ignoring released key
             ignore_next = FALSE;
         }
-        else if(statusTmp == 0xF0){ // 0xF0 scan code for key released
+        else if(statusTmp == PS2P_KEY_RELEASED){
             ignore_next = TRUE;
-        }else{
+        }
+        else
+        {
 
-            if(statusTmp == 0x66)
+            if(statusTmp == PS2P_BACLSPACE) // backspace
             {
                 signal PS2.receivedChar(127);
             }
@@ -109,7 +116,7 @@ implementation{
         {
             bool charData = call Data.get();
 
-            status = (status >> 1) | (charData << 10);
+            status |= (charData << counter);
             counter = (counter+1)%11;
 
             if(counter ==0){
