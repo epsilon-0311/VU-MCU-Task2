@@ -1,6 +1,6 @@
 #include "Atm1280Adc.h"
 
-module VolumeAdcConfigC{
+module VolumeAdcConfigP{
     provides interface Atm1280AdcConfig;
     provides interface ResourceConfigure;
     uses interface GeneralIO as PortF0;
