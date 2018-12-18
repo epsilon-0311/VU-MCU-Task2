@@ -7,7 +7,6 @@ implementation{
     components MainC;
     components new AdcReadClientC() as volumeADC;
     components VolumeAdcConfigC;
-    components VolumeAdcP;
     components HplAtm1280GeneralIOC;
 
     readVolume = volumeADC.Read;
@@ -15,7 +14,6 @@ implementation{
     volumeADC.ResourceConfigure -> VolumeAdcConfigC;
     volumeADC.Atm1280AdcConfig -> VolumeAdcConfigC;
 
-    VolumeAdcP.Boot -> MainC.Boot;
-    VolumeAdcP.PortF0 -> HplAtm1280GeneralIOC.PortF0;
+    VolumeAdcConfigC.PortF0 -> HplAtm1280GeneralIOC.PortF0;
 
 }
