@@ -168,12 +168,23 @@ implementation
 
     command error_t FMClick.setVolume(uint8_t volume)
     {
-        if(current_operation != FM_CLICK_IDLE)
+        FMClick_operation_t current_operation_temp;
+
+        atomic
+        {
+            current_operation_temp = current_operation;
+        }
+
+        if(current_operation_temp != FM_CLICK_IDLE)
         {
             return FAIL;
         }
 
-        conf_registers.system_configuration_2.VOLUME = volume;
+        atomic
+        {
+            conf_registers.system_configuration_2.VOLUME = volume;
+        }
+
         post write_conf_to_chip_task();
 
         return SUCCESS;
@@ -181,12 +192,22 @@ implementation
 
     command error_t FMClick.receiveRDS(bool enable)
     {
-        if(current_operation != FM_CLICK_IDLE)
+        FMClick_operation_t current_operation_temp;
+
+        atomic
+        {
+            current_operation_temp = current_operation;
+        }
+
+        if(current_operation_temp != FM_CLICK_IDLE)
         {
             return FAIL;
         }
 
-        conf_registers.system_configuration_1.RDS = enable;
+        atomic
+        {
+            conf_registers.system_configuration_1.RDS = enable;
+        }
 
         post write_conf_to_chip_task();
         return SUCCESS;
@@ -204,13 +225,17 @@ implementation
 
         if(!i2c_in_use_temp)
         {
+            error_t check;
             atomic
             {
                 i2c_in_use=TRUE;
             }
             // 11 bytes are enough, low byte of test1 shouldn't be touched
-            call I2C.write(I2C_START | I2C_STOP, DEVICE_ADDRESS ,10, conf_registers.data_bytes);
-
+            check = call I2C.write(I2C_START | I2C_STOP, DEVICE_ADDRESS ,10, conf_registers.data_bytes);
+            if(check != SUCCESS)
+            {
+                 post write_conf_to_chip_task();
+            }
         }
         else
         {
@@ -229,13 +254,17 @@ implementation
 
         if(!i2c_in_use_temp)
         {
+            error_t check;
             atomic
             {
                 i2c_in_use=TRUE;
             }
             // 11 bytes are enough, low byte of test1 shouldn't be touched
-            call I2C.write(I2C_START, DEVICE_ADDRESS ,12, conf_registers.data_bytes);
-
+            check = call I2C.write(I2C_START, DEVICE_ADDRESS ,12, conf_registers.data_bytes);
+            if(check != SUCCESS)
+            {
+                 post write_conf_to_chip_task();
+            }
         }
         else
         {
@@ -246,24 +275,53 @@ implementation
     // send initial config
     void task get_data_from_chip_task()
     {
-        error_t check;
-        //read the status and rds data registers
-        check = call I2C.read(I2C_START | I2C_STOP , DEVICE_ADDRESS, 12, buffer);	//NACK should be sent
-        if(check != SUCCESS)
+        bool i2c_in_use_temp;
+
+        atomic
         {
-  	         post get_data_from_chip_task();
+            i2c_in_use_temp=i2c_in_use;
+        }
+
+        if(!i2c_in_use_temp)
+        {
+            error_t check;
+            //read the status and rds data registers
+            check = call I2C.read(I2C_START | I2C_STOP , DEVICE_ADDRESS, 12, buffer);	//NACK should be sent
+            if(check != SUCCESS)
+            {
+      	         post get_data_from_chip_task();
+            }
+        }
+        else
+        {
+            post get_data_from_chip_task();
         }
     }
 
     void task get_registers_task()
     {
-        error_t check;
 
-        //read all register
-        check = call I2C.read(I2C_START | I2C_STOP , DEVICE_ADDRESS, 32, buffer);	//NACK should be sent
-        if(check != SUCCESS)
+        bool i2c_in_use_temp;
+
+        atomic
         {
-             post get_registers_task();
+            i2c_in_use_temp=i2c_in_use;
+        }
+
+        if(!i2c_in_use_temp)
+        {
+            error_t check;
+
+            //read all register
+            check = call I2C.read(I2C_START | I2C_STOP , DEVICE_ADDRESS, 32, buffer);	//NACK should be sent
+            if(check != SUCCESS)
+            {
+                 post get_registers_task();
+            }
+        }
+        else
+        {
+            post get_data_from_chip_task();
         }
     }
 
@@ -585,8 +643,6 @@ implementation
 
             if(current_rds_text_index == 0 && rds_radio_text[0] != '\0')
             {
-                call debug_out_2.toggle(0xFF);
-                /* call debug_out_2.set(current_rds_text_index); */
                 signal FMClick.rdsReceived(rds, rds_radio_text);
             }
         }
@@ -678,16 +734,11 @@ implementation
 
                     conf_registers.system_configuration_2.SPACE  = 1; // set spacing for Europe
 
-                    // configuration for seeking channels, see AN248
+                    // configuration for seeking channels, see AN284
                     // http://read.pudn.com/downloads159/doc/710424/AN284Rev0_1.pdf
                     conf_registers.system_configuration_2.SEEKTH = 0x19;
                     conf_registers.system_configuration_3.SKSNR = 0x4;
                     conf_registers.system_configuration_3.SKCNT = 0x8;
-
-                    // implementation temp
-                    conf_registers.system_configuration_2.VOLUME = 0xF;
-                    conf_registers.system_configuration_1.RDS = 1; // enable RDS
-
                 }
                 post write_conf_to_chip_task();
                 break;
@@ -798,10 +849,10 @@ implementation
                         channel <<= 8;
                         channel |= conf_registers.channel.CHANNEL_L;
 
-                        call debug_out_2.clear(0xFF);
+                        /* call debug_out_2.clear(0xFF);
                         call debug_out_3.clear(0xFF);
                         call debug_out_2.set(channel>>8);
-                        call debug_out_3.set(channel& 0xFF);
+                        call debug_out_3.set(channel& 0xFF); */
 
                         signal FMClick.tuneComplete(channel);
                     }
