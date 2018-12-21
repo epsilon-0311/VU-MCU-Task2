@@ -10,7 +10,7 @@ implementation{
     components HplAtm128InterruptC;
     components new TimerMilliC() as Timer;
 
-    components new HplAtm1280GeneralIOFastPortP((uint16_t)&PORTA, (uint16_t)&DDRA, (uint16_t)&PINA) as Port1;
+    components new HplAtm1280GeneralIOFastPortP((uint16_t)&PORTH, (uint16_t)&DDRH, (uint16_t)&PINH) as Port1;
     components new HplAtm1280GeneralIOFastPortP((uint16_t)&PORTJ, (uint16_t)&DDRJ, (uint16_t)&PINJ) as Port2;
     components new HplAtm1280GeneralIOFastPortP((uint16_t)&PORTL, (uint16_t)&DDRL, (uint16_t)&PINL) as Port3;
 

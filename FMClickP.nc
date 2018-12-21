@@ -8,8 +8,10 @@
 #define RDS_TYPE_RADIO_TEXT 0x2
 #define RDS_TYPE_TIME 0x4
 
-#define RDS_STATION_LENGTH 2
-#define RDS_TEXT_LENGTH 4
+#define RDS_STATION_LENGTH 8
+#define RDS_STATION_
+#define RDS_TEXT_LENGTH_A 64
+#define RDS_TEXT_LENGTH_B 32
 
 #define START_YEAR 2018
 #define MJD_1ST_JANUARY_2018 58119u
@@ -43,6 +45,7 @@ module FMClickP{
 
 implementation
 {
+    void task init_task();
     void task get_data_from_chip_task();
     void task write_conf_to_chip_task();
     void task send_initial_conf_task();
@@ -58,10 +61,13 @@ implementation
     uint8_t sync_state;
 
     bool i2c_in_use;
-
     bool debug_read;
-
     uint8_t const PROGMEM days_of_month[] = {31,28,31,30,31,30,31,31,30,31,30,31};
+    char rds_radio_text[RDS_TEXT_LENGTH_A+1]; // +1 for nul char
+    uint8_t current_rds_text_index;
+    bool current_rds_text_type;
+    char rds_radio_station[RDS_STATION_LENGTH+1]; // +1 for nul char
+    uint8_t current_rds_station_index;
 
     command void FMClick.init(void)
     {
@@ -80,10 +86,15 @@ implementation
 
         atomic
         {
-            current_operation = FM_CLICK_IDLE;
+            init_state = FM_CLICK_RST_LOW;
             i2c_in_use=FALSE;
             current_operation = FM_CLICK_IDLE;
         }
+        current_rds_text_index=0;
+        current_rds_station_index=0;
+        current_rds_text_type=FALSE;
+        rds_radio_station[0] = '\0';
+        rds_radio_text[0] = '\0';
 
         check = call I2C_Resource.request();
         if(check != SUCCESS)
@@ -274,11 +285,11 @@ implementation
             data_registers_temp.read_channel.BLERC <= 2 &&
             data_registers_temp.read_channel.BLERD <= 2)
         {
-            if(sync_state <= 3)
+            /* if(sync_state <= 3)
             {
                 sync_state++;
                 return;
-            }
+            } */
         }
         else
         {
@@ -288,8 +299,6 @@ implementation
 
 
         group_type = (data_registers_temp.rdsb.data_bytes[0] >> 4);
-        /* call debug_out_3.clear(0xFF);
-        call debug_out_3.set(group_type ); */
 
         switch (group_type)
         {
@@ -315,6 +324,7 @@ implementation
             default:
                 return;
         }
+
         if(rds==TIME)
         {
             uint32_t MJD = (data_registers_temp.rdsb.data_bytes[1] ) & 0x03; // Modified Julanian day
@@ -329,7 +339,7 @@ implementation
             uint8_t time_offset = data_registers_temp.rdsd.data_bytes[1] & 0x1F;
             uint8_t temp = data_registers_temp.rdsd.data_bytes[0];
 
-            char rds_buffer[16];
+            char rds_buffer[6];
 
             temp >>= 4;
 
@@ -400,6 +410,11 @@ implementation
             MJD <<=8;
             MJD |= data_registers_temp.rdsc.data_bytes[1] ;
             MJD >>=1; // Now we have a 17 bit date format
+
+            if(MJD < MJD_1ST_JANUARY_2018) // check if inpu is valid
+            {
+                return;
+            }
             MJD -= MJD_1ST_JANUARY_2018; // normalize to 1st january of 2018
 
             while( MJD >= DAYS_IN_YEAR)
@@ -457,47 +472,127 @@ implementation
             rds_buffer[0] = current_day;
             rds_buffer[1] = current_month;
             rds_buffer[2] = (current_year >> 8);
-            rds_buffer[3] = (current_hour & 0xFF);
+            rds_buffer[3] = (current_year & 0xFF);
             rds_buffer[4] = current_hour;
             rds_buffer[5] = current_minute;
 
             signal FMClick.rdsReceived(rds, rds_buffer);
-            
+
         }
         else if(rds == RT)
         {
-            char rds_buffer[RDS_TEXT_LENGTH+2];
 
             uint8_t index = data_registers_temp.rdsb.data_bytes[1] & 0x0F;
+            char temp_buf[5];
 
-            if(data_registers_temp.rdsb.data & (1<<4))
+            if((data_registers_temp.rdsb.data_bytes[1] & 0x10 )&& !current_rds_text_type)
             {
-                return;
+                current_rds_text_type=TRUE;
+                current_rds_text_index =0;
+                rds_radio_text[0]='\0';
+            }
+            else if((data_registers_temp.rdsb.data_bytes[1] & 0x10) == 0 && current_rds_text_type)
+            {
+                current_rds_text_type=FALSE;
+                current_rds_text_index =0;
+                rds_radio_text[0]='\0';
+            }
+
+            if(current_rds_text_index == 0)
+            {
+                rds_radio_text[0] = '\0';
             }
 
             if( data_registers_temp.rdsb.data_bytes[0] & 0x08)
             {
-                rds_buffer[0] = index<<1;
-                rds_buffer[1] = (char)(data_registers_temp.rdsc.data_bytes[0] &0x7F);
-                rds_buffer[2] = (char)(data_registers_temp.rdsc.data_bytes[1] &0x7F);
-                rds_buffer[3] = '\0';
+                index <<= 1;
+                temp_buf[0] = (char)(data_registers_temp.rdsc.data_bytes[0] &0x7F);
+                temp_buf[1] = (char)(data_registers_temp.rdsc.data_bytes[1] &0x7F);
+                temp_buf[2] = '\0';
+
+                if(index != current_rds_text_index)
+                {
+                    current_rds_text_index=0;
+                    return;
+                }
+
+                if(temp_buf[0] == '\r')
+                {
+                    temp_buf[0] = '\0';
+                    current_rds_text_index = 0;
+                }
+                else if(temp_buf[1] == '\r')
+                {
+                    temp_buf[1] = '\0';
+                    current_rds_text_index = 0;
+                }
+                else if(current_rds_text_index +2 >= RDS_TEXT_LENGTH_B)
+                {
+                    current_rds_text_index=0;
+                }
+                else
+                {
+                    current_rds_text_index+=2;
+                }
+
             }
             else
             {
-                rds_buffer[0] = index<<2;
-                rds_buffer[2] = (char)(data_registers_temp.rdsc.data_bytes[1] &0x7F);
-                rds_buffer[1] = (char)(data_registers_temp.rdsc.data_bytes[0] &0x7F );
-                rds_buffer[3] = (char)(data_registers_temp.rdsd.data_bytes[0] &0x7F);
-                rds_buffer[4] = (char)(data_registers_temp.rdsd.data_bytes[1] &0x7F);
-                rds_buffer[5] = '\0';
+                index<<=2;
+                temp_buf[0] = (char)(data_registers_temp.rdsc.data_bytes[0] &0x7F);
+                temp_buf[1] = (char)(data_registers_temp.rdsc.data_bytes[1] &0x7F);
+                temp_buf[2] = (char)(data_registers_temp.rdsd.data_bytes[0] &0x7F);
+                temp_buf[3] = (char)(data_registers_temp.rdsd.data_bytes[1] &0x7F);
+                temp_buf[4] = '\0';
 
+                if(index != current_rds_text_index)
+                {
+                    current_rds_text_index=0;
+                    return;
+                }
+
+                if(temp_buf[0] == '\r')
+                {
+                    temp_buf[0] = '\0';
+                    current_rds_text_index = 0;
+                }
+                else if(temp_buf[1] == '\r')
+                {
+                    temp_buf[1] = '\0';
+                    current_rds_text_index = 0;
+                }
+                else if(temp_buf[2] == '\r')
+                {
+                    temp_buf[2] = '\0';
+                    current_rds_text_index = 0;
+                }
+                else if(temp_buf[3] == '\r')
+                {
+                    temp_buf[3] = '\0';
+                    current_rds_text_index = 0;
+                }
+                else if(current_rds_text_index + 4 >= RDS_TEXT_LENGTH_A)
+                {
+                    current_rds_text_index=0;
+                }
+                else
+                {
+                    current_rds_text_index+=4;
+                }
             }
 
-            signal FMClick.rdsReceived(rds, rds_buffer);
+            strcat(rds_radio_text, temp_buf);
+
+            if(current_rds_text_index == 0 && rds_radio_text[0] != '\0')
+            {
+                call debug_out_2.toggle(0xFF);
+                /* call debug_out_2.set(current_rds_text_index); */
+                signal FMClick.rdsReceived(rds, rds_radio_text);
+            }
         }
         else
         {
-            char rds_buffer[RDS_STATION_LENGTH+2];
+            char rds_buffer[4];
 
             uint8_t index = (data_registers_temp.rdsb.data_bytes[1] ) & 0x03;
 
@@ -514,6 +609,101 @@ implementation
             signal FMClick.rdsReceived(rds, rds_buffer);
         }
 
+    }
+
+    void task init_task()
+    {
+        FMClick_init_state_t init_state_temp;
+
+        atomic
+        {
+            init_state_temp = init_state;
+        }
+
+        switch(init_state_temp)
+        {
+            case FM_CLICK_RST_LOW:
+                call Reset_Pin.set();
+                init_state_temp=FM_CLICK_RST_HIGH;
+                call Timer.startOneShot(1);
+                break;
+        	case FM_CLICK_RST_HIGH:
+                init_state_temp= FM_CLICK_READ_REGISTERS;
+                post get_registers_task();
+
+                break;
+            case FM_CLICK_READ_REGISTERS:
+                atomic
+                {
+                    conf_registers.test1.XOSCEN = 1;
+                }
+
+                init_state_temp = FM_CLICK_SET_OSC;
+                post send_initial_conf_task();
+                break;
+
+            case FM_CLICK_SET_OSC:
+                init_state_temp = FM_CLICK_WAIT_OSC;
+                call Timer.startOneShot(500);
+                break;
+            case FM_CLICK_WAIT_OSC:
+
+                init_state_temp=FM_CLICK_WAIT_POWER_UP;
+                atomic
+                {
+                    // power configuration register
+                    conf_registers.power_conf.ENABLE=1;
+                    conf_registers.power_conf.DISABLE=0;
+                    conf_registers.power_conf.DMUTE=1;
+                }
+
+                post write_conf_to_chip_task();
+
+                break;
+            case FM_CLICK_WAIT_POWER_UP:
+                init_state_temp=FM_CLICK_INIT_DONE;
+                call Timer.startOneShot(115);
+                break;
+            case FM_CLICK_INIT_DONE:
+                init_state_temp=FM_CLICK_SEND_DEFAULT_CONF;
+                atomic
+                {
+                    conf_registers.power_conf.SKMODE=0;
+                    conf_registers.power_conf.RDSM=1;
+
+                    conf_registers.system_configuration_1.GPIO2=1; // enable interrupt pin
+                    conf_registers.system_configuration_1.DE=1; // set De-emphasis for Europe
+                    conf_registers.system_configuration_1.RDSIEN = 1; // end RDS interrupt
+                    conf_registers.system_configuration_1.STCIEN = 1; // enable Tune/Seek interrupt
+
+                    conf_registers.system_configuration_2.SPACE  = 1; // set spacing for Europe
+
+                    // configuration for seeking channels, see AN248
+                    // http://read.pudn.com/downloads159/doc/710424/AN284Rev0_1.pdf
+                    conf_registers.system_configuration_2.SEEKTH = 0x19;
+                    conf_registers.system_configuration_3.SKSNR = 0x4;
+                    conf_registers.system_configuration_3.SKCNT = 0x8;
+
+                    // implementation temp
+                    conf_registers.system_configuration_2.VOLUME = 0xF;
+                    conf_registers.system_configuration_1.RDS = 1; // enable RDS
+
+                }
+                post write_conf_to_chip_task();
+                break;
+
+            case FM_CLICK_SEND_DEFAULT_CONF:
+                signal FMClick.initDone(SUCCESS);
+                init_state_temp = FM_CLICK_READY;
+                break;
+            case FM_CLICK_READY:
+                break;
+        }
+
+        atomic
+        {
+            init_state = init_state_temp;
+        }
     }
 
     event void I2C_Resource.granted()
@@ -534,9 +724,11 @@ implementation
             i2c_in_use=FALSE;
         }
 
-        if(init_state_temp == FM_CLICK_SET_OSC || init_state_temp == FM_CLICK_WAIT_POWER_UP)
+        if(init_state_temp == FM_CLICK_SET_OSC
+            || init_state_temp == FM_CLICK_WAIT_POWER_UP
+            || init_state_temp == FM_CLICK_SEND_DEFAULT_CONF)
         {
-            call Timer.startOneShot(1);
+            post init_task();
         }
         else if(current_operation_temp == FM_CLICK_WAIT_WRITE_FINISH)
         {
@@ -570,14 +762,7 @@ implementation
                 conf_registers.data_bytes[i] = data[i+offset];
             }
 
-            atomic
-            {
-                init_state = FM_CLICK_SET_OSC;
-            }
-
-            conf_registers.test1.XOSCEN = 1;
-
-            post send_initial_conf_task();
+            post init_task();
         }
         else if(length==12)
         {
@@ -612,6 +797,11 @@ implementation
                         channel = conf_registers.channel.CHANNEL_H;
                         channel <<= 8;
                         channel |= conf_registers.channel.CHANNEL_L;
+
+                        call debug_out_2.clear(0xFF);
+                        call debug_out_3.clear(0xFF);
+                        call debug_out_2.set(channel>>8);
+                        call debug_out_3.set(channel& 0xFF);
 
                         signal FMClick.tuneComplete(channel);
                     }
@@ -664,80 +854,6 @@ implementation
 
     event void Timer.fired()
     {
-        FMClick_init_state_t init_state_temp;
-
-        atomic
-        {
-            init_state_temp = init_state;
-        }
-
-        switch(init_state_temp)
-        {
-            case FM_CLICK_RST_LOW:
-                call Reset_Pin.set();
-                init_state_temp=FM_CLICK_RST_HIGH;
-                call Timer.startOneShot(1);
-                break;
-        	case FM_CLICK_RST_HIGH:
-                init_state_temp= FM_CLICK_READ_REGISTERS;
-                post get_registers_task();
-
-                break;
-            case FM_CLICK_READ_REGISTERS:
-
-                break;
-            case FM_CLICK_SET_OSC:
-
-                init_state_temp=FM_CLICK_WAIT_POWER_UP;
-                atomic
-                {
-                    // power configuration register
-                    conf_registers.power_conf.ENABLE=1;
-                    conf_registers.power_conf.DISABLE=0;
-                    conf_registers.power_conf.DMUTE=1;
-                }
-
-                post write_conf_to_chip_task();
-
-                break;
-            case FM_CLICK_WAIT_POWER_UP:
-                init_state_temp=FM_CLICK_INIT_DONE;
-                call Timer.startOneShot(110);
-                break;
-            case FM_CLICK_INIT_DONE:
-                atomic
-                {
-                    conf_registers.power_conf.SKMODE=0;
-                    conf_registers.power_conf.RDSM=1;
-
-                    conf_registers.system_configuration_1.GPIO2=1; // enable interrupt pin
-                    conf_registers.system_configuration_1.DE=1; // set De-emphasis for Europe
-                    conf_registers.system_configuration_1.RDSIEN = 1; // end RDS interrupt
-                    conf_registers.system_configuration_1.STCIEN = 1; // enable Tune/Seek interrupt
-
-                    conf_registers.system_configuration_2.SPACE  = 1; // set spacing for Europe
-
-                    // configuration for seeking channels, see AN248
-                    // http://read.pudn.com/downloads159/doc/710424/AN284Rev0_1.pdf
-                    conf_registers.system_configuration_2.SEEKTH = 0x19;
-                    conf_registers.system_configuration_3.SKSNR = 0x4;
-                    conf_registers.system_configuration_3.SKCNT = 0x8;
-
-                    // implementation temp
-                    conf_registers.system_configuration_2.VOLUME = 0xF;
-                    conf_registers.system_configuration_1.RDS = 1; // enable RDS
-
-                }
-                post write_conf_to_chip_task();
-
-                signal FMClick.initDone(SUCCESS);
-
-                break;
-        }
-
-        atomic
-        {
-            init_state = init_state_temp;
-        }
+        post init_task();
     }
 }

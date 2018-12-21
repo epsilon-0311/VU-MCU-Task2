@@ -10,10 +10,19 @@ implementation {
     components BufferedLcdC;
     components VolumeAdcC;
     components FMClickC;
+    components GlcdC;
+    components new TimerMilliC() as Timer;
+
+    components new HplAtm1280GeneralIOFastPortP((uint16_t)&PORTJ, (uint16_t)&DDRJ, (uint16_t)&PINJ) as Port2;
+
 
     RS.PS2 -> PS2C;
     RS.Boot -> MainC.Boot;
     RS.BufferedLcd -> BufferedLcdC;
     RS.ReadVolume -> VolumeAdcC.readVolume;
     RS.FMClick -> FMClickC;
+    RS.Glcd ->GlcdC;
+    RS.Timer -> Timer;
+
+    RS.debug_out_2 -> Port2;
 }
