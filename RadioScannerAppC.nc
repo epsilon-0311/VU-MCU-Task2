@@ -11,7 +11,8 @@ implementation {
     components VolumeAdcC;
     components FMClickC;
     components GlcdC;
-    components new TimerMilliC() as Timer;
+    components new TimerMilliC() as Scroll_Timer;
+    components new TimerMilliC() as Volume_Timer;
 
     components new HplAtm1280GeneralIOFastPortP((uint16_t)&PORTJ, (uint16_t)&DDRJ, (uint16_t)&PINJ) as Port2;
 
@@ -22,7 +23,8 @@ implementation {
     RS.ReadVolume -> VolumeAdcC.readVolume;
     RS.FMClick -> FMClickC;
     RS.Glcd ->GlcdC;
-    RS.Timer -> Timer;
+    RS.Scroll_Timer -> Scroll_Timer;
+    RS.Volume_Timer -> Volume_Timer;
 
     RS.debug_out_2 -> Port2;
 }
