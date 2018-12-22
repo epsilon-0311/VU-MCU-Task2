@@ -40,6 +40,7 @@ implementation {
     const char PROGMEM ok_string[] = "ok\r";
     const char PROGMEM purgeall_string[] = "purgeall\n";
     const char PROGMEM add_format_string[] = "add\rfreq=%u\n";
+    const char PROGMEM update_format_string[] = "update\rid=%u,freq=%u,name=%s\n";
     const char PROGMEM list_stations_string[] = "list\r\n";
     const char PROGMEM list_favorites_string[] = "list\rqdial=1\n";
     const char PROGMEM get_entry_format_string[] = "get\rid=%u\n";
@@ -236,7 +237,21 @@ implementation {
         }
         else
         {
-            //update
+            uint8_t length = strlen_P(update_format_string);
+            char update_format[length];
+            char update_string[length+20]; // max 3 chars longer
+
+            strcpy_P(update_format, update_format_string);
+            sprintf(update_string, update_format, id, channel->frequency, channel->name);
+
+            enqueueMsg(update_string);
+
+            atomic
+            {
+                current_op=DATABASE_ADD;
+            }
+
+            post send_task();
         }
     }
 
@@ -346,8 +361,9 @@ implementation {
     void decode_radio_info(char *text)
     {
         char *token;
-        uint8_t i, id;
+        uint8_t i, id=0;
         channelInfo ch_info;
+        ch_info.frequency = 0;
 
         token = strtok(text, "\r");
         token = strtok(NULL, "\r");
@@ -382,6 +398,7 @@ implementation {
             else if(0 == strncmp_P(token, radio_info_key_frequency, strlen_P(radio_info_key_frequency)))
             {
                 uint16_t current_int=0;
+
                 for(i = strlen_P(radio_info_key_frequency); i < strlen(token); i++)
                 {
                     if(token[i] >= '0' && token[i] <= '9')

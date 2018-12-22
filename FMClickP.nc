@@ -648,21 +648,17 @@ implementation
         }
         else
         {
-            char rds_buffer[4];
-
             uint8_t index = (data_registers_temp.rdsb.data_bytes[1] ) & 0x03;
+            index <<=1;
 
-            rds_buffer[0] = index<<1;
-            rds_buffer[1] = data_registers_temp.rdsd.data_bytes[0]&0x7F;
-            rds_buffer[2] = data_registers_temp.rdsd.data_bytes[1]&0x7F;
-            rds_buffer[3] = '\0';
+            rds_radio_station[index] = data_registers_temp.rdsd.data_bytes[0]&0x7F;
+            rds_radio_station[index+1] = data_registers_temp.rdsd.data_bytes[1]&0x7F;
 
-            if(rds_buffer[1] < 0x20 || rds_buffer[2] < 0x20 )
+            if(index == 6)
             {
-                return;
+                rds_radio_station[8]='\0';
+                signal FMClick.rdsReceived(rds, rds_radio_station);
             }
-
-            signal FMClick.rdsReceived(rds, rds_buffer);
         }
 
     }

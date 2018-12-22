@@ -478,10 +478,11 @@ implementation {
     void task exted_scan_list_task()
     {
         uint16_t channel;
-
+        bool scan_running_temp;
         atomic
         {
             channel = current_channel;
+            scan_running_temp = scan_running;
         }
 
         if(scan_index >= SCAN_LIST_SIZE)
@@ -494,7 +495,7 @@ implementation {
             return;
         }
 
-        if(scan_running)
+        if(scan_running_temp)
         {
             if(call FMClick.seek(TRUE) != SUCCESS)
             {
@@ -520,6 +521,59 @@ implementation {
         else
         {
             scan_list[scan_index] = channel;
+        }
+    }
+
+    void task check_in_database_task()
+    {
+        uint8_t i;
+        uint16_t channel;
+
+        atomic
+        {
+            channel = current_channel;
+        }
+
+        for(i=0; i< SCAN_LIST_SIZE;i++)
+        {
+            if(scan_list[i] == channel)
+            {
+                call Database.getChannel(i);
+                break;
+            }
+        }
+    }
+
+    void task update_station_database()
+    {
+        uint16_t channel;
+        uint8_t i;
+        atomic
+        {
+            channel = current_channel;
+        }
+
+        for(i=0; i< SCAN_LIST_SIZE;i++)
+        {
+            if(scan_list[i] == channel)
+            {
+                channelInfo ch_info;
+                char temp[9];
+                ch_info.name = temp;
+                atomic
+                {
+                    (void)strcpy(ch_info.name, rds_info.radio_station);
+                }
+                ch_info.name[8] = '\0';
+
+                call debug_out_2.toggle(0xFF);
+
+                ch_info.frequency = channel+BAND_BOTTOM_100kHz;
+
+                call Database.saveChannel(i, &ch_info);
+
+                break;
+            }
         }
     }
 
@@ -583,21 +637,41 @@ implementation {
             post update_radio_text_task();
             post update_channel_task();
         }
+
+        if(!scan_running)
+        {
+            post check_in_database_task();
+        }
     }
 
     async event void FMClick.rdsReceived(RDSType type, char *buf)
     {
         if(type == PS)
         {
-            uint8_t index = (uint8_t)buf[0];
+
+            uint8_t diff;
+
             atomic
             {
-                strcpy (&(rds_info.radio_station[index]),&(buf[1]));
+                diff = strcmp(rds_info.radio_station, buf);
             }
-            if(display_free)
+
+            if(diff)
             {
-                post update_radio_station_task();
+                atomic
+                {
+
+                    strcpy (rds_info.radio_station, buf);
+                }
+
+                if(display_free)
+                {
+                    post update_radio_station_task();
+                }
+
+                post update_station_database();
             }
+
         }
         else if(type == RT)
         {
@@ -647,22 +721,21 @@ implementation {
     {
         uint16_t new_channel = channel.frequency;
         uint16_t current_channel_temp;
-        char temp[16];
         new_channel-=BAND_BOTTOM_100kHz;
-
 
         atomic
         {
             current_channel_temp = current_channel;
         }
 
-        /* if(current_channel_temp == new_channel)
+        if(current_channel_temp == new_channel)
         {
             atomic
             {
-                strcpy (rds_info.radio_text, channel.name);
+                strcpy (rds_info.radio_station, channel.name);
             }
-        } */
+            post update_radio_station_task();
+        }
 
         atomic
         {
