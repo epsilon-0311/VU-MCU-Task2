@@ -175,7 +175,62 @@ implementation {
             current_char = new_char;
         }
 
-        if(current_char == 'h' || current_char == 'H')
+        if(display_list)
+        {
+            if(current_char == '+')
+            {
+                current_page++;
+                if(current_page > scan_index/SCAN_PAGE_SIZE)
+                {
+                    current_page =0;
+                }
+                post display_list_task();
+            }
+            else if(current_char == '-')
+            {
+                if(current_page==0)
+                {
+                    current_page = scan_index/SCAN_PAGE_SIZE;
+                }
+                else
+                {
+                    current_page--;
+                }
+                post display_list_task();
+            }
+            else if ( current_char >= '0' && current_char<='9')
+            {
+                uint16_t channel;
+                uint8_t index = current_page*SCAN_PAGE_SIZE;
+                index += ((uint8_t)current_char -0x30);
+                channel = scan_list[index];
+
+                atomic
+                {
+                    display_free = TRUE;
+                }
+                display_list = FALSE;
+
+                call FMClick.tune(channel);
+                call Glcd.fill(0x00);
+                call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
+            }
+            else if(current_char == 'l')
+            {
+                atomic
+                {
+                    display_free = TRUE;
+                }
+                display_list = FALSE;
+                call Glcd.fill(0x00);
+                post update_channel_task();
+                post update_radio_station_task();
+                post update_radio_time_task();
+                post update_channel_task();
+                call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
+            }
+        }
+        else if(current_char == 'h' || current_char == 'H')
         {
             bool display_free_temp;
 
@@ -231,7 +286,8 @@ implementation {
             }
             channel++;
             call FMClick.tune(channel);
-        }else if(current_char == '-')
+        }
+        else if(current_char == '-')
         {
             uint16_t channel;
             atomic
@@ -331,6 +387,10 @@ implementation {
     void task display_list_task()
     {
         uint8_t i;
+        uint8_t offset;
+        char entry_format[35];
+        char list_output[CHARS_IN_LINE*SCAN_PAGE_SIZE+1]; // +1 Nullterminator
+        list_output[0] = '\0'; // set first char to null Nullterminator -> easier use of strcat
 
         atomic
         {
@@ -338,53 +398,69 @@ implementation {
             display_help = FALSE;
         }
 
+        if(!display_list)
+        {
+            current_page = 0;
+            scan_list[scan_index] = 0;
+        }
+
+        (void) strcpy_P(entry_format, list_entry_format);
+
+        offset = SCAN_PAGE_SIZE*current_page;
+        display_list = TRUE;
         call Glcd.fill(0x00);
 
-        for(i=0; i<6; i++)
+        for(i=0; (i < SCAN_PAGE_SIZE )&& i+offset < SCAN_LIST_SIZE; i+=2)
         {
             char display_string[20];
-            char display_string_2[20];
 
-            uint32_t radio_frequency = RADIO_SPACING_kHz * scan_list[i];
-            uint16_t kHz;
-            uint8_t MHz;
+            uint32_t radio_frequency = RADIO_SPACING_kHz;
+            uint16_t channel = scan_list[i+offset];
+            uint16_t kHz_1,kHz_2;
+            uint8_t MHz_1, MHz_2;
 
-            (void) strcpy_P(display_string, station_format);
+            if(channel==0)
+            {
+                break;
+            }
 
-            radio_frequency += (uint32_t) BAND_BOTTOM;
-            kHz = radio_frequency%1000;
-            kHz /= 100;
-            MHz = radio_frequency/1000;
+            radio_frequency *= channel;
 
-            sprintf(display_string_2, display_string, MHz, kHz);
+            radio_frequency += BAND_BOTTOM_kHz;
+            kHz_1 = radio_frequency%1000;
+            kHz_1 /= 100;
+            MHz_1 = radio_frequency/1000;
 
-            call Glcd.drawText(display_string_2,0,10 + 10*i);
+            channel = scan_list[i+offset+1];
+
+            if(channel==0)
+            {
+                char half_entry_format[17];
+
+                (void) strcpy_P(half_entry_format, list_half_entry_format);
+                sprintf(display_string, half_entry_format, i, MHz_1, kHz_1);
+                strcat(list_output, display_string);
+                break;
+            }
+            else
+            {
+                radio_frequency = RADIO_SPACING_kHz;
+                radio_frequency *= channel;
+                radio_frequency += BAND_BOTTOM_kHz;
+                kHz_2 = radio_frequency%1000;
+                kHz_2 /= 100;
+                MHz_2 = radio_frequency/1000;
+
+                sprintf(display_string, entry_format, i, MHz_1, kHz_1, i+1, MHz_2, kHz_2);
+                strcat(list_output, display_string);
+            }
         }
 
-        for(i=0; i<6; i++)
-        {
-            char display_string[20];
-            char display_string_2[20];
-
-            uint32_t radio_frequency = RADIO_SPACING_kHz * scan_list[i+6];
-            uint16_t kHz;
-            uint8_t MHz;
-
-            (void) strcpy_P(display_string, station_format);
-
-            radio_frequency += (uint32_t) BAND_BOTTOM;
-            kHz = radio_frequency%1000;
-            kHz /= 100;
-            MHz = radio_frequency/1000;
-
-            sprintf(display_string_2, display_string, MHz, kHz);
-
-            call Glcd.drawText(display_string_2,64,10 + 10*i);
-        }
-
+        call Glcd.drawText(list_output,0,10);
+        call Glcd.drawTextPgm(list_change_page,0,50);
     }
 
-    void task scan_task()
+    void task exted_scan_list_task()
     {
         uint16_t channel;
 
@@ -403,20 +479,34 @@ implementation {
             return;
         }
 
-        if(call FMClick.seek(TRUE) != SUCCESS)
+        if(scan_running)
         {
-            post scan_task();
-        }
-        else if(channel != 0)
-        {
-            scan_list[scan_index] = channel;
-            atomic
+            if(call FMClick.seek(TRUE) != SUCCESS)
             {
-                scan_index++;
+                post exted_scan_list_task();
+            }
+            else if(channel != 0 )
+            {
+                if(scan_index == 0 ||
+                    (scan_index > 0 && channel != scan_list[scan_index-1]))
+                {
+                    channelInfo ch_info;
+                    ch_info.frequency = BAND_BOTTOM_100kHz + channel;
+                    call Database.saveChannel(0xFF, &ch_info);
+
+                    scan_list[scan_index] = channel;
+                    atomic
+                    {
+                        scan_index++;
+                    }
+                }
             }
         }
+        else
+        {
+            scan_list[scan_index] = channel;
+        }
     }
-
 
     async event void PS2.receivedChar(uint8_t chr){
         atomic
@@ -469,11 +559,10 @@ implementation {
             }
             else
             {
-                post scan_task();
+                post exted_scan_list_task();
             }
         }
-
-        if(display_free)
+        else if(display_free)
         {
             post update_radio_station_task();
             post update_radio_text_task();
