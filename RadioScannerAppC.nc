@@ -11,6 +11,7 @@ implementation {
     components VolumeAdcC;
     components FMClickC;
     components GlcdC;
+    components DatabaseC;
     components new TimerMilliC() as Scroll_Timer;
     components new TimerMilliC() as Volume_Timer;
 
@@ -25,6 +26,7 @@ implementation {
     RS.Glcd ->GlcdC;
     RS.Scroll_Timer -> Scroll_Timer;
     RS.Volume_Timer -> Volume_Timer;
+    RS.Database -> DatabaseC;
 
     RS.debug_out_2 -> Port2;
 }

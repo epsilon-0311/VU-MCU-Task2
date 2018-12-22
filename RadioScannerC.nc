@@ -7,8 +7,21 @@
 #define VOLUME_SAMPLE_ARRAY_SIZE 5
 
 #define RADIO_SPACING_kHz 100
-#define BAND_BOTTOM 87500L
+#define BAND_BOTTOM_kHz 87500L
+#define BAND_BOTTOM_100kHz 875L
+
 #define SCAN_LIST_SIZE 32
+#define SCAN_PAGE_SIZE 10
+
+#define CHARS_IN_LINE 19
+
+#define RADIO_TIME_LINE 10
+#define RADIO_STATION_LINE 20
+#define RADIO_STATION_SPACER 64
+#define RADIO_TEXT_LINE 30
+#define HELP_TEXT_LINE 60
+
+
 
 typedef struct __rds_info
 {
@@ -28,6 +41,7 @@ module RadioScannerC{
     uses interface FMClick;
     uses interface Read<uint16_t> as ReadVolume;
     uses interface Glcd;
+    uses interface Database;
     uses interface Timer<TMilli> as Scroll_Timer;
     uses interface Timer<TMilli> as Volume_Timer;
 
@@ -43,8 +57,10 @@ implementation {
     uint8_t next_volume_entry;
 
     bool scan_running;
+    bool display_list;
     uint16_t scan_list[SCAN_LIST_SIZE];
     uint8_t scan_index;
+    uint8_t current_page;
 
     char new_char;
     bool display_help;
@@ -56,9 +72,12 @@ implementation {
     char const PROGMEM station_format[] = "%3u.%1u MHz:";
     char const PROGMEM empty_line[] = "                   ";
     char const PROGMEM empty_half_line[] = "          ";
-    char const PROGMEM h_for_help[] = "press h to toggle help";
-    char const PROGMEM help_string[] =  "n/p switch channel\n+/- tune\nl   display list\ns   scan";
+    char const PROGMEM h_for_help[] = "h to toggle help";
+    char const PROGMEM help_string[] =  "n/p switch channel\n+/- tune\nl   toggle list\ns   scan\nf   add favorite";
     char const PROGMEM volume_text[] = "Volume:%2u";
+    char const PROGMEM list_entry_format[] = "%1u:%3u.%1u  | %1u:%3u.%1u \n";
+    char const PROGMEM list_half_entry_format[] = "%1u:%3u.%1u\n";
+    char const PROGMEM list_change_page[] = "+/- to change page\n[0-9] tune channel";
 
     task void display_list_task();
 
@@ -70,6 +89,7 @@ implementation {
         call Glcd.fill(0x00);
         call Scroll_Timer.startPeriodic(SCROLL_PERIOD_MS);
         call Volume_Timer.startPeriodic(VOLUME_SAMPLE_PERIOD_MS);
+        call Database.getChannelList(0);
 
         current_radio_text_index=0;
 
@@ -111,7 +131,7 @@ implementation {
             radio_frequency *= (uint32_t) current_channel;
         }
 
-        radio_frequency += (uint32_t) BAND_BOTTOM;
+        radio_frequency += (uint32_t) BAND_BOTTOM_kHz;
         kHz = radio_frequency%1000;
         kHz /= 100;
         MHz = radio_frequency/1000;
@@ -267,6 +287,7 @@ implementation {
                 post update_radio_station_task();
                 post update_radio_time_task();
                 post update_channel_task();
+                call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
             }
         }
         else if(current_char == 'n')
@@ -305,14 +326,8 @@ implementation {
                 scan_running = TRUE;
                 scan_index=0;
             }
-        }else if(current_char == 's' || current_char == 'S')
-        {
-            call FMClick.tune(0);
-            atomic
-            {
-                scan_running = TRUE;
-                scan_index=0;
-            }
+            call Database.purgeChannelList();
+
         }
         else if(current_char == 'l' || current_char == 'L')
         {
@@ -625,6 +640,42 @@ implementation {
     event void Volume_Timer.fired()
     {
         call ReadVolume.read();
+    }
+
+
+	event void Database.receivedChannelEntry(uint8_t id, channelInfo channel)
+    {
+        uint16_t new_channel = channel.frequency;
+        uint16_t current_channel_temp;
+        char temp[16];
+        new_channel-=BAND_BOTTOM_100kHz;
+
+
+        atomic
+        {
+            current_channel_temp = current_channel;
+        }
+
+        /* if(current_channel_temp == new_channel)
+        {
+            atomic
+            {
+                strcpy (rds_info.radio_text, channel.name);
+            }
+        } */
+
+        atomic
+        {
+            scan_index = id;
+            current_channel=new_channel;
+        }
+
+        post exted_scan_list_task();
+    }
+
+	event void Database.savedChannel(uint8_t id, uint8_t result)
+    {
+
     }
 
 }
