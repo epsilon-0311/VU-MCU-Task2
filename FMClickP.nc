@@ -539,7 +539,6 @@ implementation
         }
         else if(rds == RT)
         {
-
             uint8_t index = data_registers_temp.rdsb.data_bytes[1] & 0x0F;
             char temp_buf[5];
 
@@ -649,6 +648,7 @@ implementation
         else
         {
             uint8_t index = (data_registers_temp.rdsb.data_bytes[1] ) & 0x03;
+
             index <<=1;
 
             rds_radio_station[index] = data_registers_temp.rdsd.data_bytes[0]&0x7F;
@@ -844,11 +844,6 @@ implementation
                         channel = conf_registers.channel.CHANNEL_H;
                         channel <<= 8;
                         channel |= conf_registers.channel.CHANNEL_L;
-
-                        /* call debug_out_2.clear(0xFF);
-                        call debug_out_3.clear(0xFF);
-                        call debug_out_2.set(channel>>8);
-                        call debug_out_3.set(channel& 0xFF); */
 
                         signal FMClick.tuneComplete(channel);
                     }
