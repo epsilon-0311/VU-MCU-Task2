@@ -4,7 +4,6 @@ configuration VolumeAdcC{
 }
 
 implementation{
-    components MainC;
     components new AdcReadClientC() as volumeADC;
     components VolumeAdcConfigP;
     components HplAtm1280GeneralIOC;
