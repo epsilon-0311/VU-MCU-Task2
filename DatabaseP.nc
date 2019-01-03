@@ -166,7 +166,7 @@ implementation {
 
     void task send_task()
     {
-        if(!sendBusy)
+        if(!sendBusy && ! call MsgQueue.empty())
         {
             udp_msg_t* outData = call MsgQueue.head();
             uint16_t outLen = call LenQueue.head();
@@ -174,7 +174,7 @@ implementation {
                 sendBusy = TRUE;
             }
         }
-        else
+        else if(! call MsgQueue.empty())
         {
             post send_task();
         }
