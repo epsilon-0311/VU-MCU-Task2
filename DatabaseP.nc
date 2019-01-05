@@ -292,7 +292,19 @@ implementation {
      */
     command void Database.getChannel(uint8_t id)
     {
+        uint8_t length = strlen_P(get_entry_format_string);
+        char get_format[length];
+        char get_string[length+5];
 
+        call debug_out_3.toggle(0xFF);
+
+        strcpy_P(get_format, get_entry_format_string);
+        sprintf(get_string, get_format, id);
+
+        enqueueMsg(get_string);
+        call OpQueue.enqueue(DATABASE_GET);
+
+        post send_task();
     }
 
     /**
