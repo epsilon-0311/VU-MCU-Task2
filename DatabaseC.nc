@@ -15,6 +15,7 @@ implementation
     components new PoolC(udp_msg_t, MSG_POOL_SIZE) as UdpMsgPool;
     components new QueueC(udp_msg_t*, MSG_POOL_SIZE) as UdpMsgQueue;
     components new QueueC(uint16_t, MSG_POOL_SIZE) as UdpLenQueue;
+    components new QueueC(Database_operation_t, MSG_POOL_SIZE) as DbOpQueue;
 
     components new HplAtm1280GeneralIOFastPortP((uint16_t)&PORTL, (uint16_t)&DDRL, (uint16_t)&PINL) as Port3;
     components BufferedLcdC;
@@ -31,6 +32,7 @@ implementation
     DatabaseP.MsgPool   ->  UdpMsgPool;
     DatabaseP.LenQueue  ->  UdpLenQueue;
     DatabaseP.MsgQueue  ->  UdpMsgQueue;
+    DatabaseP.OpQueue   ->  DbOpQueue;
 
     DatabaseP.debug_out_3 -> Port3;
     DatabaseP.BufferedLcd -> BufferedLcdC;

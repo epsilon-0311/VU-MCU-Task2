@@ -14,6 +14,7 @@ module DatabaseP{
     uses interface IpControl;
     uses interface Queue<udp_msg_t *> as MsgQueue;
     uses interface Queue<uint16_t> as LenQueue;
+    uses interface Queue<Database_operation_t> as OpQueue;
     uses interface Pool<udp_msg_t> as MsgPool;
 
     uses interface GeneralIOPort as debug_out_3;
@@ -34,13 +35,13 @@ implementation {
     void task retrieve_list_data_task();
 
     in_addr_t destination = { .bytes {DESTINATION}};
-    Database_operation_t current_op;
+    /* Database_operation_t current_op; */
 
     const char PROGMEM error_string[] = "err\r";
     const char PROGMEM ok_string[] = "ok\r";
     const char PROGMEM purgeall_string[] = "purgeall\n";
-    const char PROGMEM add_format_string[] = "add\rfreq=%u\n";
-    const char PROGMEM update_format_string[] = "update\rid=%u,freq=%u,name=%s\n";
+    const char PROGMEM add_format_string[] = "add\r";
+    const char PROGMEM update_format_string[] = "update\r";
     const char PROGMEM list_stations_string[] = "list\r\n";
     const char PROGMEM list_favorites_string[] = "list\rqdial=1\n";
     const char PROGMEM get_entry_format_string[] = "get\rid=%u\n";
@@ -68,10 +69,6 @@ implementation {
 		call IpControl.setGateway(&cgw);
 
 		call Control.start();
-        atomic
-        {
-            current_op=DATABASE_IDLE;
-        }
 	}
 
     event void Control.stopDone(error_t error)
@@ -100,14 +97,14 @@ implementation {
     event void UdpReceive.received(in_addr_t *srcIp, uint16_t srcPort, uint8_t *data, uint16_t len)
     {
         char return_data[len];
+        uint16_t current_op = call OpQueue.dequeue();
+
         memcpy(return_data, data, len);
 
         if(strncmp_P(return_data, error_string, 4) == 0)
         {
             switch(current_op)
             {
-                case DATABASE_IDLE:
-                    break;
                 case DATABASE_ADD:
                     break;
                 case DATABASE_UPDATE:
@@ -124,6 +121,7 @@ implementation {
                     break;
                 case DATABASE_PURGEALL:
                     enqueuePgmMsg(purgeall_string);
+                    call OpQueue.enqueue(DATABASE_PURGEALL);
                     post send_task();
                     break;
             }
@@ -133,8 +131,6 @@ implementation {
 
             switch(current_op)
             {
-                case DATABASE_IDLE:
-                    break;
                 case DATABASE_ADD:
                     break;
                 case DATABASE_UPDATE:
@@ -154,11 +150,11 @@ implementation {
                     break;
                 case DATABASE_GET:
                     decode_radio_info(return_data);
+
                     break;
                 case DATABASE_PURGEALL:
                     break;
                 default:
-
                     break;
             }
         }
@@ -182,10 +178,6 @@ implementation {
 
     void task retrieve_list_data_task()
     {
-        uint8_t length = strlen_P(get_entry_format_string);
-        char get_format[length];
-        char get_string[length+3]; // max 3 chars longer
-
         if(db_ids[db_index] == 0xFF)
         {
             db_index=0;
@@ -193,17 +185,16 @@ implementation {
         }
         else
         {
+            uint8_t length = strlen_P(get_entry_format_string);
+            char get_format[length];
+            char get_string[length+3]; // max 3 chars longer
+
             strcpy_P(get_format, get_entry_format_string);
             sprintf(get_string, get_format, db_ids[db_index]);
             enqueueMsg(get_string);
             db_index++;
-            call debug_out_3.clear(0xFF);
-            call debug_out_3.set(db_ids[db_index]);
 
-            atomic
-            {
-                current_op=DATABASE_GET_LIST;
-            }
+            call OpQueue.enqueue(DATABASE_GET_LIST);
 
             post send_task();
         }
@@ -218,41 +209,57 @@ implementation {
      */
     command void Database.saveChannel(uint8_t id, channelInfo *channel)
     {
+        char message[MAX_MSG_LEN];
+        /* char station[9];
+        strcpy(station, channel->name); */
+
         if(id == 0xFF)
         {
-            uint8_t length = strlen_P(add_format_string);
-            char add_format[length];
-            char add_string[length+3]; // max 3 chars longer
-
-            strcpy_P(add_format, add_format_string);
-            sprintf(add_string, add_format, channel->frequency);
-            enqueueMsg(add_string);
-
-            atomic
-            {
-                current_op=DATABASE_ADD;
-            }
-
-            post send_task();
+            strcpy_P(message, add_format_string);
+            call OpQueue.enqueue(DATABASE_ADD);
         }
         else
         {
-            uint8_t length = strlen_P(update_format_string);
-            char update_format[length];
-            char update_string[length+20]; // max 3 chars longer
+            char id_buffer [3];
 
-            strcpy_P(update_format, update_format_string);
-            sprintf(update_string, update_format, id, channel->frequency, channel->name);
+            strcpy_P(message, update_format_string);
+            strcat_P(message, radio_info_key_id);
 
-            enqueueMsg(update_string);
+            itoa (id,id_buffer,10);
+            strcat(message, id_buffer);
+            strcat(message, ",");
 
-            atomic
-            {
-                current_op=DATABASE_ADD;
-            }
-
-            post send_task();
+            call OpQueue.enqueue(DATABASE_UPDATE);
         }
+
+        if(channel->frequency >0)
+        {
+            char freq_buffer [5];
+            strcat_P(message, radio_info_key_frequency);
+            itoa (channel->frequency,freq_buffer,10);
+            strcat(message, freq_buffer);
+            strcat(message, ",");
+        }
+
+        if(strlen(channel->name) > 0)
+        {
+            strcat_P(message, radio_info_key_name);
+            strcat(message, channel->name);
+            strcat(message, ",");
+        }
+
+        if(channel->quickDial > 0 && channel->quickDial < 10)
+        {
+            char qdial_buffer [2];
+            strcat_P(message, radio_info_key_qdial);
+            itoa (channel->quickDial,qdial_buffer,10);
+            strcat(message, qdial_buffer);
+            strcat(message, ",");
+        }
+
+        strcat(message, "\n");
+        enqueueMsg(message);
+        post send_task();
     }
 
 
@@ -267,14 +274,13 @@ implementation {
         if(onlyFavorites)
         {
             enqueuePgmMsg(list_favorites_string);
+            call OpQueue.enqueue(DATABASE_LIST_FAVORITES);
         }
         else
         {
             enqueuePgmMsg(list_stations_string);
-            atomic
-            {
-                current_op=DATABASE_LIST;
-            }
+            call OpQueue.enqueue(DATABASE_LIST);
+
         }
 
         post send_task();
@@ -295,12 +301,10 @@ implementation {
      */
     command void Database.purgeChannelList()
     {
-        enqueuePgmMsg(purgeall_string);
 
-        atomic
-        {
-            current_op=DATABASE_PURGEALL;
-        }
+        enqueuePgmMsg(purgeall_string);
+        call OpQueue.enqueue(DATABASE_PURGEALL);
+
         post send_task();
     }
 
@@ -364,7 +368,7 @@ implementation {
         uint8_t i, id=0;
         channelInfo ch_info;
         ch_info.frequency = 0;
-
+        ch_info.quickDial = 0;
         token = strtok(text, "\r");
         token = strtok(NULL, "\r");
         token = strtok(token, ",");
@@ -416,10 +420,11 @@ implementation {
                 {
                     if(token[i] >= '0' && token[i] <= '9')
                     {
-                        current_int *= 10;
-                        current_int += (uint8_t)(token[i]-'0');
+                        current_int = (uint8_t)(token[i]-'0');
+                        break;
                     }
                 }
+                
                 ch_info.quickDial = current_int;
             }
 
