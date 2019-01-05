@@ -402,7 +402,7 @@ implementation {
         {
             input_favorite=TRUE;
         }
-        else if ( current_char >= '0' && current_char<='9')
+        else if ( current_char >= '1' && current_char<='9')
         {
             uint8_t fav_pos = ((uint8_t)current_char -'0');
             call FMClick.tune(favorite_list[fav_pos]);
