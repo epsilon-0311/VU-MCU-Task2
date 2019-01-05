@@ -3,7 +3,7 @@
 module VolumeAdcConfigP{
     provides interface Atm1280AdcConfig;
     provides interface ResourceConfigure;
-    uses interface GeneralIO as PortF0;
+    uses interface GeneralIO as ADCPort;
 }
 
 implementation{
@@ -13,8 +13,8 @@ implementation{
     * Must always be used in conjuntion with the Resource interface.
     */
     async command void ResourceConfigure.configure(){
-        call PortF0.makeInput();
-        call PortF0.clr();
+        call ADCPort.makeInput();
+        call ADCPort.clr();
     }
 
     /**

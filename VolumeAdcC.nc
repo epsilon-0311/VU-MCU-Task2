@@ -13,6 +13,6 @@ implementation{
     volumeADC.ResourceConfigure -> VolumeAdcConfigP;
     volumeADC.Atm1280AdcConfig -> VolumeAdcConfigP;
 
-    VolumeAdcConfigP.PortF0 -> HplAtm1280GeneralIOC.PortF0;
+    VolumeAdcConfigP.ADCPort -> HplAtm1280GeneralIOC.PortF0;
 
 }
