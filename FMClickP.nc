@@ -13,10 +13,10 @@
 #define RDS_TEXT_LENGTH_A 64
 #define RDS_TEXT_LENGTH_B 32
 
-#define START_YEAR 2018
-#define MJD_1ST_JANUARY_2018 58119u
+#define START_YEAR 2019
+#define MJD_1ST_JANUARY_2019 58484u
 #define LEAP_YEAR_DISTANCE 4
-#define NEXT_LEAP_YEAR 2
+#define NEXT_LEAP_YEAR 1
 #define DAYS_IN_YEAR 365
 #define DAYS_IN_LEAP_YEAR 366
 #define MONTHS_IN_YEAR 12
@@ -469,11 +469,11 @@ implementation
             MJD |= data_registers_temp.rdsc.data_bytes[1] ;
             MJD >>=1; // Now we have a 17 bit date format
 
-            if(MJD < MJD_1ST_JANUARY_2018) // check if inpu is valid
+            if(MJD < MJD_1ST_JANUARY_2019) // check if inpu is valid
             {
                 return;
             }
-            MJD -= MJD_1ST_JANUARY_2018; // normalize to 1st january of 2018
+            MJD -= MJD_1ST_JANUARY_2019; // normalize to 1st january of 2018
 
             while( MJD >= DAYS_IN_YEAR)
             {
