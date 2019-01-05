@@ -70,7 +70,7 @@ implementation {
     bool display_list;
 
     bool input_favorite;
-    uint8_t favorite_list[FAVORITE_LIST_LENGTH+1];
+    uint16_t favorite_list[FAVORITE_LIST_LENGTH+1];
 
     rds_info_t rds_info;
 
