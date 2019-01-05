@@ -246,23 +246,15 @@ implementation {
                 post update_channel_task();
                 post update_radio_station_task();
                 post update_radio_time_task();
-                post update_channel_task();
                 call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
             }
         }
         else if(current_char == 'h' || current_char == 'H')
         {
-            bool display_free_temp;
 
             atomic
             {
                 display_help = !display_help;
-                display_free_temp= display_free;
-            }
-
-            if(! display_free)
-            {
-                return;
             }
 
             call Glcd.fill(0x00);
@@ -286,7 +278,6 @@ implementation {
                 post update_channel_task();
                 post update_radio_station_task();
                 post update_radio_time_task();
-                post update_channel_task();
                 call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
             }
         }
@@ -326,6 +317,8 @@ implementation {
                 scan_running = TRUE;
                 scan_index=0;
             }
+            memset(scan_list,0,SCAN_LIST_SIZE);
+
             call Database.purgeChannelList();
 
         }
@@ -416,7 +409,6 @@ implementation {
         if(!display_list)
         {
             current_page = 0;
-            scan_list[scan_index] = 0;
         }
 
         (void) strcpy_P(entry_format, list_entry_format);
@@ -475,7 +467,7 @@ implementation {
         call Glcd.drawTextPgm(list_change_page,0,50);
     }
 
-    void task exted_scan_list_task()
+    void task extend_scan_list_task()
     {
         uint16_t channel;
         bool scan_running_temp;
@@ -499,13 +491,14 @@ implementation {
         {
             if(call FMClick.seek(TRUE) != SUCCESS)
             {
-                post exted_scan_list_task();
+                post extend_scan_list_task();
             }
             else if(channel != 0 )
             {
                 if(scan_index == 0 ||
                     (scan_index > 0 && channel != scan_list[scan_index-1]))
                 {
+
                     channelInfo ch_info;
                     ch_info.frequency = BAND_BOTTOM_100kHz + channel;
                     call Database.saveChannel(0xFF, &ch_info);
@@ -600,6 +593,7 @@ implementation {
 
     event void FMClick.initDone(error_t res)
     {
+
         post enable_RDS_task();
     }
 
@@ -607,12 +601,13 @@ implementation {
     {
         uint8_t index;
         uint16_t old_channel;
+
         atomic
         {
             old_channel = current_channel;
             current_channel = channel;
-            rds_info.radio_station[0] = '\0';
-            rds_info.radio_text[0] = '\0';
+            memset(rds_info.radio_station,'\0',RADIO_STATION_LENGTH);
+            memset(rds_info.radio_text,'\0',RADIO_TEXT_LENGTH);
             index = scan_index;
         }
 
@@ -628,7 +623,7 @@ implementation {
             }
             else
             {
-                post exted_scan_list_task();
+                post extend_scan_list_task();
             }
         }
         else if(display_free)
@@ -660,7 +655,6 @@ implementation {
             {
                 atomic
                 {
-
                     strcpy (rds_info.radio_station, buf);
                 }
 
@@ -696,6 +690,7 @@ implementation {
                 rds_info.current_hour = (uint8_t)buf[4];
                 rds_info.current_minute = (uint8_t)buf[5];
             }
+
             if(display_free)
             {
                 post update_radio_time_task();
@@ -743,7 +738,7 @@ implementation {
             current_channel=new_channel;
         }
 
-        post exted_scan_list_task();
+        post extend_scan_list_task();
     }
 
 	event void Database.savedChannel(uint8_t id, uint8_t result)
