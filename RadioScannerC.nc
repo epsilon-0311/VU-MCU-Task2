@@ -21,12 +21,15 @@
 #define RADIO_TEXT_LINE 30
 #define HELP_TEXT_LINE 60
 
+#define RADIO_TEXT_LENGTH 64
+#define RADIO_STATION_LENGTH 8
 
+#define FAVORITE_LIST_LENGTH 9
 
 typedef struct __rds_info
 {
-    char radio_text[65];
-    char radio_station[9];
+    char radio_text[RADIO_TEXT_LENGTH+1];
+    char radio_station[RADIO_STATION_LENGTH+1];
     uint8_t current_day;
     uint8_t current_month;
     uint16_t current_year;
@@ -57,7 +60,6 @@ implementation {
     uint8_t next_volume_entry;
 
     bool scan_running;
-    bool display_list;
     uint16_t scan_list[SCAN_LIST_SIZE];
     uint8_t scan_index;
     uint8_t current_page;
@@ -65,6 +67,10 @@ implementation {
     char new_char;
     bool display_help;
     bool display_free;
+    bool display_list;
+
+    bool input_favorite;
+    uint8_t favorite_list[FAVORITE_LIST_LENGTH+1];
 
     rds_info_t rds_info;
 
@@ -73,7 +79,7 @@ implementation {
     char const PROGMEM empty_line[] = "                   ";
     char const PROGMEM empty_half_line[] = "          ";
     char const PROGMEM h_for_help[] = "h to toggle help";
-    char const PROGMEM help_string[] =  "n/p switch channel\n+/- tune\nl   toggle list\ns   scan\nf   add favorite";
+    char const PROGMEM help_string[] =  "n/p switch channel\n+/- tune\nl   toggle list\ns   scan\nf   add favorite\nt   add note";
     char const PROGMEM volume_text[] = "Volume:%2u";
     char const PROGMEM list_entry_format[] = "%1u:%3u.%1u  | %1u:%3u.%1u \n";
     char const PROGMEM list_half_entry_format[] = "%1u:%3u.%1u\n";
@@ -97,6 +103,7 @@ implementation {
         {
             display_free = TRUE;
             rds_info.radio_text[0]='\0';
+            memset(favorite_list,0,FAVORITE_LIST_LENGTH);
         }
     }
 
@@ -104,7 +111,7 @@ implementation {
     {
         uint8_t length = strlen_P(date_time_format);
         char format[length+1];
-        char date_string[16+1];
+        char date_string[length+1];
 
         (void) strcpy_P(format, date_time_format);
         atomic
@@ -199,18 +206,40 @@ implementation {
         {
             if(current_char == '+')
             {
+                uint8_t current_index = SCAN_PAGE_SIZE;
                 current_page++;
-                if(current_page > scan_index/SCAN_PAGE_SIZE)
+                current_index*=current_page;
+
+                if(current_index >= SCAN_LIST_SIZE ||
+                     scan_list[current_index] ==0)
                 {
                     current_page =0;
                 }
+
                 post display_list_task();
             }
             else if(current_char == '-')
             {
                 if(current_page==0)
                 {
-                    current_page = scan_index/SCAN_PAGE_SIZE;
+
+                    current_page = SCAN_LIST_SIZE/SCAN_PAGE_SIZE -1;
+
+                    for(current_page = SCAN_LIST_SIZE/SCAN_PAGE_SIZE -1;
+                        current_page < SCAN_LIST_SIZE/SCAN_PAGE_SIZE; current_page--)
+                    {
+                        uint8_t current_index= current_page*SCAN_PAGE_SIZE;
+
+                        if(scan_list[current_index] != 0)
+                        {
+                            break;
+                        }
+                    }
+
+                    if(current_page >= SCAN_LIST_SIZE/SCAN_PAGE_SIZE)
+                    {
+                        current_page=0;
+                    }
                 }
                 else
                 {
@@ -247,6 +276,48 @@ implementation {
                 post update_radio_station_task();
                 post update_radio_time_task();
                 call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
+            }
+        }
+        else if(input_favorite)
+        {
+            if ( current_char >= '1' && current_char<='9')
+            {
+                uint8_t fav_pos = ((uint8_t)current_char -'0'), i;
+                uint16_t channel;
+                bool found =FALSE;
+                channelInfo ch_info, *ch_pointer;
+
+                ch_pointer = &ch_info;
+                ch_info.frequency = 0;
+
+                atomic
+                {
+                    channel = current_channel;
+                }
+
+                for(i=0; i< SCAN_LIST_SIZE;i++)
+                {
+                    if(scan_list[i] == channel)
+                    {
+                        found=TRUE;
+                        break;
+                    }
+                }
+
+                ch_info.quickDial = fav_pos;
+
+                if(found)
+                {
+                    call Database.saveChannel(i, ch_pointer);
+                }
+                else
+                {
+                    call Database.saveChannel(0xFF, ch_pointer);
+                }
+
+                favorite_list[fav_pos] = channel;
+
+                input_favorite=FALSE;
             }
         }
         else if(current_char == 'h' || current_char == 'H')
@@ -317,6 +388,7 @@ implementation {
                 scan_running = TRUE;
                 scan_index=0;
             }
+
             memset(scan_list,0,SCAN_LIST_SIZE);
 
             call Database.purgeChannelList();
@@ -326,6 +398,16 @@ implementation {
         {
             post display_list_task();
         }
+        else if (current_char == 'f' || current_char == 'F')
+        {
+            input_favorite=TRUE;
+        }
+        else if ( current_char >= '0' && current_char<='9')
+        {
+            uint8_t fav_pos = ((uint8_t)current_char -'0');
+            call FMClick.tune(favorite_list[fav_pos]);
+        }
+
     }
 
     void task enable_RDS_task()
@@ -550,20 +632,19 @@ implementation {
         {
             if(scan_list[i] == channel)
             {
-                channelInfo ch_info;
+                channelInfo ch_info, *ch_pointer;
                 char temp[9];
+                ch_pointer = &ch_info;
                 ch_info.name = temp;
+                ch_info.quickDial = 0xFF;
                 atomic
                 {
                     (void)strcpy(ch_info.name, rds_info.radio_station);
                 }
-                ch_info.name[8] = '\0';
-
-                call debug_out_2.toggle(0xFF);
 
                 ch_info.frequency = channel+BAND_BOTTOM_100kHz;
 
-                call Database.saveChannel(i, &ch_info);
+                call Database.saveChannel(i, ch_pointer);
 
                 break;
             }
@@ -730,6 +811,11 @@ implementation {
                 strcpy (rds_info.radio_station, channel.name);
             }
             post update_radio_station_task();
+        }
+
+        if(channel.quickDial >0 && channel.quickDial<10)
+        {
+            favorite_list[channel.quickDial] = new_channel;
         }
 
         atomic
