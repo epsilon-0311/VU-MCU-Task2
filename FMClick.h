@@ -16,7 +16,6 @@ typedef union __sys_conf_1_t
         uint8_t GPIO2               : 2; // Bits 2:3
         uint8_t GPIO3               : 2; // Bits 4:5
         uint8_t BLNDADJ             : 2; // Bits 6:7
-
     };
     uint8_t data_bytes[2];
 } sys_conf_1_t;
