@@ -243,8 +243,17 @@ implementation {
 
         if(strlen(channel->name) > 0)
         {
+            uint8_t i=strlen(channel->name)-1;
             strcat_P(message, radio_info_key_name);
+
+            for(; i<8; i++)
+            {
+                channel->name[i] = ' ';
+            }
+            channel->name[8] = '\0';
+
             strcat(message, channel->name);
+
             strcat(message, ",");
         }
 
@@ -255,6 +264,14 @@ implementation {
             itoa (channel->quickDial,qdial_buffer,10);
             strcat(message, qdial_buffer);
             strcat(message, ",");
+        }
+
+
+        //has to be last entry
+        if(strlen(channel->notes) > 0)
+        {
+            strcat_P(message, radio_info_key_note);
+            strcat(message, channel->notes);
         }
 
         strcat(message, "\n");
@@ -409,7 +426,25 @@ implementation {
             }
             else if(0 == strncmp_P(token, radio_info_key_note, strlen_P(radio_info_key_note)))
             {
+                char note[40];
+                uint8_t length;
+                char *pch;
 
+                ch_info.notes = note ;
+                strncpy(ch_info.notes, &(token[strlen_P(radio_info_key_note)]), 40);
+                length = strlen(ch_info.notes);
+
+                pch=strchr(ch_info.notes,'\n');
+
+                if(pch != NULL)
+                {
+                    uint8_t end = pch-ch_info.notes;
+                    ch_info.notes[end]='\0';
+                }
+                else
+                {
+                    ch_info.notes[40]='\0';
+                }
             }
             else if(0 == strncmp_P(token, radio_info_key_frequency, strlen_P(radio_info_key_frequency)))
             {
@@ -436,7 +471,7 @@ implementation {
                         break;
                     }
                 }
-                
+
                 ch_info.quickDial = current_int;
             }
 
