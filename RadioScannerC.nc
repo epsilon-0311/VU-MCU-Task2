@@ -377,7 +377,7 @@ implementation {
                 post update_station_database();
 
             }
-            else if(current_char >= '!' && current_char < 127 && current_char) // 127 == delete char
+            else if(current_char >= ' ' && current_char < 127 && current_char) // 127 == delete char
             {
                 uint8_t length = strlen(note);
                 if(length < RADIO_NOTE_LENGTH)
