@@ -373,6 +373,7 @@ implementation {
                 post update_radio_station_task();
                 post update_radio_text_task();
                 post update_note_task();
+
                 post update_station_database();
 
             }
@@ -941,7 +942,7 @@ implementation {
             }
 
             if(display_free_temp)
-            {                
+            {
                 post update_note_task();
                 post update_radio_station_task();
             }
