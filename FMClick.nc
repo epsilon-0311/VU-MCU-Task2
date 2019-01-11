@@ -8,8 +8,6 @@ typedef enum {
 
 interface FMClick {
 
-    command void init(void);
-
     command error_t tune(uint16_t channel);
 
     command error_t seek(bool up);

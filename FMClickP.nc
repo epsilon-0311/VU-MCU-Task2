@@ -2,31 +2,6 @@
 #include <avr/pgmspace.h>
 #include "FMClick.h"
 
-#define DEVICE_ADDRESS 0x10
-
-#define RDS_TYPE_TUNING 0x0
-#define RDS_TYPE_RADIO_TEXT 0x2
-#define RDS_TYPE_TIME 0x4
-
-#define RDS_STATION_LENGTH 8
-#define RDS_STATION_
-#define RDS_TEXT_LENGTH_A 64
-#define RDS_TEXT_LENGTH_B 32
-
-#define START_YEAR 2019
-#define MJD_1ST_JANUARY_2019 58484u
-#define LEAP_YEAR_DISTANCE 4
-#define NEXT_LEAP_YEAR 1
-#define DAYS_IN_YEAR 365
-#define DAYS_IN_LEAP_YEAR 366
-#define MONTHS_IN_YEAR 12
-#define LEAP_MONTH 1 // starting at 0
-#define LEAP_MONTH_DAYS 29
-
-#define TIME_OFFSET_MINUTES 30
-#define MAX_MINUTES 59
-#define MAX_HOUR 23
-
 module FMClickP{
     uses interface I2CPacket<TI2CBasicAddr> as I2C;
     uses interface Resource as I2C_Resource;
@@ -41,6 +16,7 @@ module FMClickP{
     uses interface GeneralIOPort as debug_out_3;
 
     provides interface FMClick;
+    provides interface Init;
 }
 
 implementation
@@ -51,13 +27,23 @@ implementation
     void task send_initial_conf_task();
     void task rds_task();
 
+    void handle_last_operation(FMClick_operation_t operation);
+
+    void decode_radio_text(void);
+    void handle_radio_text_type_a(char *buffer, data_registers_t data_registers_temp, uint8_t index);
+    void handle_radio_text_type_b(char *buffer, data_registers_t data_registers_temp, uint8_t index);
+    void decode_datetime(void);
+    void decode_date(char *buffer, data_registers_t data_registers_temp);
+    void decode_time(char *buffer, data_registers_t data_registers_temp);
+    
+
     conf_registers_t conf_registers;
     data_registers_t data_registers;
 
     FMClick_init_state_t init_state;
     FMClick_operation_t current_operation;
 
-    uint8_t buffer[32];
+    uint8_t i2c_buffer[32];
     uint8_t sync_state;
 
     bool i2c_in_use;
@@ -69,7 +55,7 @@ implementation
     char rds_radio_station[RDS_STATION_LENGTH+1]; // +1 for nul char
     uint8_t current_rds_station_index;
 
-    command void FMClick.init(void)
+    command error_t Init.init(void)
     {
         error_t check;
         call debug_out.makeOutput(0xFF);
@@ -99,7 +85,8 @@ implementation
         check = call I2C_Resource.request();
         if(check != SUCCESS)
         {
-          printf("Radio failed");
+            printf("Radio failed");
+            return FAIL;
         }
 
         sync_state = 0;
@@ -107,6 +94,7 @@ implementation
         call External_Interrupt.edge(FALSE);
         call External_Interrupt.enable();
 
+        return SUCCESS;
     }
 
     command error_t FMClick.tune(uint16_t channel)
@@ -286,7 +274,7 @@ implementation
         {
             error_t check;
             //read the status and rds data registers
-            check = call I2C.read(I2C_START | I2C_STOP , DEVICE_ADDRESS, 12, buffer);	//NACK should be sent
+            check = call I2C.read(I2C_START | I2C_STOP , DEVICE_ADDRESS, 12, i2c_buffer);	//NACK should be sent
             if(check != SUCCESS)
             {
       	         post get_data_from_chip_task();
@@ -313,7 +301,7 @@ implementation
             error_t check;
 
             //read all register
-            check = call I2C.read(I2C_START | I2C_STOP , DEVICE_ADDRESS, 32, buffer);	//NACK should be sent
+            check = call I2C.read(I2C_START | I2C_STOP , DEVICE_ADDRESS, 32, i2c_buffer);	//NACK should be sent
             if(check != SUCCESS)
             {
                  post get_registers_task();
@@ -343,15 +331,11 @@ implementation
             data_registers_temp.read_channel.BLERC <= 2 &&
             data_registers_temp.read_channel.BLERD <= 2)
         {
-            /* if(sync_state <= 3)
-            {
-                sync_state++;
-                return;
-            } */
+            
         }
         else
         {
-            sync_state =0;
+            // not sufficient synced
             return;
         }
 
@@ -385,265 +369,11 @@ implementation
 
         if(rds==TIME)
         {
-            uint32_t MJD = (data_registers_temp.rdsb.data_bytes[1] ) & 0x03; // Modified Julanian day
-
-            uint16_t current_year = START_YEAR;
-            uint8_t current_month =0;
-            uint8_t current_day =0;
-            bool is_leap_year = FALSE;
-            uint8_t counter=NEXT_LEAP_YEAR;
-            int8_t current_hour = data_registers_temp.rdsc.data_bytes[1] & 0x1;
-            int8_t current_minute = data_registers_temp.rdsd.data_bytes[0] & 0xF;
-            uint8_t time_offset = data_registers_temp.rdsd.data_bytes[1] & 0x1F;
-            uint8_t temp = data_registers_temp.rdsd.data_bytes[0];
-
-            char rds_buffer[6];
-
-            temp >>= 4;
-
-            current_hour <<= 4;
-            current_hour |= (temp & 0x0F);
-
-            temp = data_registers_temp.rdsd.data_bytes[1];
-            temp >>=6;
-
-            current_minute <<= 2;
-            current_minute |= (temp & 0x3);
-
-            if(data_registers_temp.rdsd.data_bytes[1] & 0x20)
-            {
-                if(time_offset & 0x01)
-                {
-                    current_minute -= TIME_OFFSET_MINUTES;
-                    if(current_minute <0)
-                    {
-                        current_minute = MAX_MINUTES+current_minute;
-                    }
-
-                    current_hour--;
-                    if(current_hour <0)
-                    {
-                        current_hour = MAX_HOUR;
-                    }
-                }
-                time_offset >>=1;
-
-                current_hour -= time_offset;
-
-                if(current_hour <0)
-                {
-                    current_hour = MAX_HOUR+current_hour;
-                }
-            }
-            else
-            {
-                if(time_offset & 0x01)
-                {
-                    current_minute += TIME_OFFSET_MINUTES;
-
-                    if(current_minute > MAX_MINUTES)
-                    {
-                        current_minute = current_minute - MAX_MINUTES;
-                    }
-
-                    current_hour++;
-                    if(current_hour > MAX_HOUR)
-                    {
-                        current_hour = 0;
-                    }
-                }
-
-                time_offset >>=1;
-
-                current_hour += time_offset;
-
-                if(current_hour > MAX_HOUR)
-                {
-                    current_hour = current_hour-MAX_HOUR;
-                }
-            }
-
-            MJD <<=8;
-            MJD |= data_registers_temp.rdsc.data_bytes[0] ;
-            MJD <<=8;
-            MJD |= data_registers_temp.rdsc.data_bytes[1] ;
-            MJD >>=1; // Now we have a 17 bit date format
-
-            if(MJD < MJD_1ST_JANUARY_2019) // check if inpu is valid
-            {
-                return;
-            }
-            MJD -= MJD_1ST_JANUARY_2019; // normalize to 1st january of 2018
-
-            while( MJD >= DAYS_IN_YEAR)
-            {
-                counter++;
-
-                counter %= LEAP_YEAR_DISTANCE;
-
-                if(counter==0) // check if current year is a leap year
-                {
-                    MJD-=DAYS_IN_YEAR;
-                    is_leap_year = TRUE;
-                }
-                else if(is_leap_year) // check if last year was a leap year
-                {
-                    MJD-=DAYS_IN_LEAP_YEAR;
-                    is_leap_year = FALSE;
-                }
-                else
-                {
-                    MJD-=DAYS_IN_YEAR;
-                    is_leap_year = FALSE;
-                }
-                current_year++;
-            }
-
-            for(counter=0; counter < MONTHS_IN_YEAR;counter++)
-            {
-                uint8_t days = pgm_read_byte(&(days_of_month[counter]));
-                if(is_leap_year && counter == LEAP_MONTH)
-                {
-                    if(MJD >= LEAP_MONTH_DAYS)
-                    {
-                        MJD -= LEAP_MONTH_DAYS;
-                    }
-                    else
-                    {
-                        current_month=counter+1;
-                        current_day = MJD+1;
-                        break;
-                    }
-                }
-                else if(MJD > days)
-                {
-                    MJD -= days;
-                }
-                else
-                {
-                    current_month=counter+1;
-                    current_day = MJD+1;
-                    break;
-                }
-            }
-
-            rds_buffer[0] = current_day;
-            rds_buffer[1] = current_month;
-            rds_buffer[2] = (current_year >> 8);
-            rds_buffer[3] = (current_year & 0xFF);
-            rds_buffer[4] = current_hour;
-            rds_buffer[5] = current_minute;
-
-            signal FMClick.rdsReceived(rds, rds_buffer);
-
+            
         }
         else if(rds == RT)
         {
-            uint8_t index = data_registers_temp.rdsb.data_bytes[1] & 0x0F;
-            char temp_buf[5];
-
-            if((data_registers_temp.rdsb.data_bytes[1] & 0x10 )&& !current_rds_text_type)
-            {
-                current_rds_text_type=TRUE;
-                current_rds_text_index =0;
-                rds_radio_text[0]='\0';
-            }
-            else if((data_registers_temp.rdsb.data_bytes[1] & 0x10) == 0 && current_rds_text_type)
-            {
-                current_rds_text_type=FALSE;
-                current_rds_text_index =0;
-                rds_radio_text[0]='\0';
-            }
-
-            if(current_rds_text_index == 0)
-            {
-                rds_radio_text[0] = '\0';
-            }
-
-            if( data_registers_temp.rdsb.data_bytes[0] & 0x08)
-            {
-                index <<= 1;
-                temp_buf[0] = (char)(data_registers_temp.rdsc.data_bytes[0] &0x7F);
-                temp_buf[1] = (char)(data_registers_temp.rdsc.data_bytes[1] &0x7F);
-                temp_buf[2] = '\0';
-
-                if(index != current_rds_text_index)
-                {
-                    current_rds_text_index=0;
-                    return;
-                }
-
-                if(temp_buf[0] == '\r')
-                {
-                    temp_buf[0] = '\0';
-                    current_rds_text_index = 0;
-                }
-                else if(temp_buf[1] == '\r')
-                {
-                    temp_buf[1] = '\0';
-                    current_rds_text_index = 0;
-                }
-                else if(current_rds_text_index +2 >= RDS_TEXT_LENGTH_B)
-                {
-                    current_rds_text_index=0;
-                }
-                else
-                {
-                    current_rds_text_index+=2;
-                }
-
-            }
-            else
-            {
-                index<<=2;
-                temp_buf[0] = (char)(data_registers_temp.rdsc.data_bytes[0] &0x7F);
-                temp_buf[1] = (char)(data_registers_temp.rdsc.data_bytes[1] &0x7F);
-                temp_buf[2] = (char)(data_registers_temp.rdsd.data_bytes[0] &0x7F);
-                temp_buf[3] = (char)(data_registers_temp.rdsd.data_bytes[1] &0x7F);
-                temp_buf[4] = '\0';
-
-                if(index != current_rds_text_index)
-                {
-                    current_rds_text_index=0;
-                    return;
-                }
-
-                if(temp_buf[0] == '\r')
-                {
-                    temp_buf[0] = '\0';
-                    current_rds_text_index = 0;
-                }
-                else if(temp_buf[1] == '\r')
-                {
-                    temp_buf[1] = '\0';
-                    current_rds_text_index = 0;
-                }
-                else if(temp_buf[2] == '\r')
-                {
-                    temp_buf[2] = '\0';
-                    current_rds_text_index = 0;
-                }
-                else if(temp_buf[3] == '\r')
-                {
-                    temp_buf[3] = '\0';
-                    current_rds_text_index = 0;
-                }
-                else if(current_rds_text_index + 4 >= RDS_TEXT_LENGTH_A)
-                {
-                    current_rds_text_index=0;
-                }
-                else
-                {
-                    current_rds_text_index+=4;
-                }
-            }
-
-            strcat(rds_radio_text, temp_buf);
-
-            if(current_rds_text_index == 0 && rds_radio_text[0] != '\0')
-            {
-                signal FMClick.rdsReceived(rds, rds_radio_text);
-            }
+            decode_radio_text();
         }
         else
         {
@@ -800,27 +530,51 @@ implementation
 
         if( init_state_temp == FM_CLICK_READ_REGISTERS)
         {
-
-            uint8_t i =0;
             uint8_t offset = 16;
 
-            for(i=0; i<12; i++)
-            {
-                conf_registers.data_bytes[i] = data[i+offset];
-            }
+            memcpy(conf_registers.data_bytes, &(data[offset]), 12);
 
             post init_task();
         }
         else if(length==12)
         {
-            uint8_t i =0;
 
-            for(i=0; i<12; i++)
+            memcpy(conf_registers.data_bytes, data, 12);
+
+            handle_last_operation(current_operation_temp);
+
+            if(data_registers.rssi.RDSR)
             {
-                data_registers.data_bytes[i] = data[i];
+                post rds_task();
             }
+        }
 
-            switch(current_operation_temp)
+    }
+
+    // there is new data to retrieve
+    async event void External_Interrupt.fired()
+    {
+        FMClick_operation_t current_operation_temp;
+
+        atomic
+        {
+            current_operation_temp = current_operation;
+        }
+
+        if(current_operation_temp != FM_CLICK_IDLE || conf_registers.system_configuration_1.RDS)
+        {
+            post get_data_from_chip_task();
+        }
+    }
+
+    event void Timer.fired()
+    {
+        post init_task();
+    }
+
+    void handle_last_operation(FMClick_operation_t operation)
+    {
+        switch(operation)
             {
                 case FM_CLICK_IDLE: // nothing to do
                 case FM_CLICK_WAIT_WRITE_FINISH:
@@ -869,33 +623,302 @@ implementation
                     }
                     break;
             }
-
-            if(data_registers.rssi.RDSR)
-            {
-                post rds_task();
-            }
-        }
-
     }
 
-    // there is new data to retrieve
-    async event void External_Interrupt.fired()
+    void decode_radio_text(void)
     {
-        FMClick_operation_t current_operation_temp;
+        uint8_t index;
+        char temp_buf[5];
+        data_registers_t data_registers_temp;
 
         atomic
         {
-            current_operation_temp = current_operation;
+            data_registers_temp =  data_registers;
         }
 
-        if(current_operation_temp != FM_CLICK_IDLE || conf_registers.system_configuration_1.RDS)
+        index = data_registers_temp.rdsb.data_bytes[1] & 0x0F;
+
+        if((data_registers_temp.rdsb.data_bytes[1] & 0x10 )&& !current_rds_text_type)
         {
-            post get_data_from_chip_task();
+            current_rds_text_type=TRUE;
+            current_rds_text_index =0;
+            rds_radio_text[0]='\0';
+        }
+        else if((data_registers_temp.rdsb.data_bytes[1] & 0x10) == 0 && current_rds_text_type)
+        {
+            current_rds_text_type=FALSE;
+            current_rds_text_index =0;
+            rds_radio_text[0]='\0';
+        }
+
+        if(current_rds_text_index == 0)
+        {
+            rds_radio_text[0] = '\0';
+        }
+
+        if( data_registers_temp.rdsb.data_bytes[0] & 0x08)
+        {
+            handle_radio_text_type_b(temp_buf, data_registers_temp, index);
+        }
+        else
+        {
+            handle_radio_text_type_a(temp_buf, data_registers_temp, index);
+        }
+
+        strcat(rds_radio_text, temp_buf);
+
+        if(current_rds_text_index == 0 && rds_radio_text[0] != '\0')
+        {
+            signal FMClick.rdsReceived(RT, rds_radio_text);
         }
     }
 
-    event void Timer.fired()
+    void handle_radio_text_type_b(char *buffer, data_registers_t data_registers_temp, uint8_t index)
     {
-        post init_task();
+        index <<= 1;
+        buffer[0] = (char)(data_registers_temp.rdsc.data_bytes[0] &0x7F);
+        buffer[1] = (char)(data_registers_temp.rdsc.data_bytes[1] &0x7F);
+        buffer[2] = '\0';
+
+        if(index != current_rds_text_index)
+        {
+            current_rds_text_index=0;
+            return;
+        }
+
+        if(buffer[0] == '\r')
+        {
+            buffer[0] = '\0';
+            current_rds_text_index = 0;
+        }
+        else if(buffer[1] == '\r')
+        {
+            buffer[1] = '\0';
+            current_rds_text_index = 0;
+        }
+        else if(current_rds_text_index +2 >= RDS_TEXT_LENGTH_B)
+        {
+            current_rds_text_index=0;
+        }
+        else
+        {
+            current_rds_text_index+=2;
+        }
+    }
+
+    void handle_radio_text_type_a(char *buffer, data_registers_t data_registers_temp, uint8_t index)
+    {
+        index<<=2;
+        buffer[0] = (char)(data_registers_temp.rdsc.data_bytes[0] &0x7F);
+        buffer[1] = (char)(data_registers_temp.rdsc.data_bytes[1] &0x7F);
+        buffer[2] = (char)(data_registers_temp.rdsd.data_bytes[0] &0x7F);
+        buffer[3] = (char)(data_registers_temp.rdsd.data_bytes[1] &0x7F);
+        buffer[4] = '\0';
+
+        if(index != current_rds_text_index)
+        {
+            current_rds_text_index=0;
+            return;
+        }
+
+        if(buffer[0] == '\r')
+        {
+            buffer[0] = '\0';
+            current_rds_text_index = 0;
+        }
+        else if(buffer[1] == '\r')
+        {
+            buffer[1] = '\0';
+            current_rds_text_index = 0;
+        }
+        else if(buffer[2] == '\r')
+        {
+            buffer[2] = '\0';
+            current_rds_text_index = 0;
+        }
+        else if(buffer[3] == '\r')
+        {
+            buffer[3] = '\0';
+            current_rds_text_index = 0;
+        }
+        else if(current_rds_text_index + 4 >= RDS_TEXT_LENGTH_A)
+        {
+            current_rds_text_index=0;
+        }
+        else
+        {
+            current_rds_text_index+=4;
+        }
+    }
+
+    void decode_datetime(void)
+    {   
+        data_registers_t data_registers_temp;
+        char rds_buffer[6];
+
+        atomic
+        {
+            data_registers_temp =  data_registers;
+        }
+                
+        decode_time(&(rds_buffer[4]), data_registers_temp);
+        decode_date(rds_buffer, data_registers_temp);
+        
+        signal FMClick.rdsReceived(RDS_TYPE_TIME, rds_buffer);
+    }
+
+    void decode_time(char *buffer, data_registers_t data_registers_temp)
+    {
+        int8_t current_hour = data_registers_temp.rdsc.data_bytes[1] & 0x1;
+        int8_t current_minute = data_registers_temp.rdsd.data_bytes[0] & 0xF;
+        uint8_t time_offset = data_registers_temp.rdsd.data_bytes[1] & 0x1F;
+        uint8_t temp = data_registers_temp.rdsd.data_bytes[0];
+
+        temp >>= 4;
+
+        current_hour <<= 4;
+        current_hour |= (temp & 0x0F);
+
+        temp = data_registers_temp.rdsd.data_bytes[1];
+        temp >>=6;
+
+        current_minute <<= 2;
+        current_minute |= (temp & 0x3);
+
+        if(data_registers_temp.rdsd.data_bytes[1] & 0x20)
+        {
+            if(time_offset & 0x01)
+            {
+                current_minute -= TIME_OFFSET_MINUTES;
+                if(current_minute <0)
+                {
+                    current_minute = MAX_MINUTES+current_minute;
+                }
+
+                current_hour--;
+                if(current_hour <0)
+                {
+                    current_hour = MAX_HOUR;
+                }
+            }
+            time_offset >>=1;
+
+            current_hour -= time_offset;
+
+            if(current_hour <0)
+            {
+                current_hour = MAX_HOUR+current_hour;
+            }
+        }
+        else
+        {
+            if(time_offset & 0x01)
+            {
+                current_minute += TIME_OFFSET_MINUTES;
+
+                if(current_minute > MAX_MINUTES)
+                {
+                    current_minute = current_minute - MAX_MINUTES;
+                }
+
+                current_hour++;
+                if(current_hour > MAX_HOUR)
+                {
+                    current_hour = 0;
+                }
+            }
+
+            time_offset >>=1;
+
+            current_hour += time_offset;
+
+            if(current_hour > MAX_HOUR)
+            {
+                current_hour = current_hour-MAX_HOUR;
+            }
+        }
+        
+        buffer[0] = current_hour;
+        buffer[1] = current_minute;
+    }
+
+    void decode_date(char *buffer, data_registers_t data_registers_temp)
+    {
+        uint32_t MJD = (data_registers_temp.rdsb.data_bytes[1] ) & 0x03; // Modified Julanian day
+
+        uint16_t current_year = START_YEAR;
+        uint8_t current_month =0;
+        uint8_t current_day =0;
+        bool is_leap_year = FALSE;
+        uint8_t counter=NEXT_LEAP_YEAR;
+
+        MJD <<=8;
+        MJD |= data_registers_temp.rdsc.data_bytes[0] ;
+        MJD <<=8;
+        MJD |= data_registers_temp.rdsc.data_bytes[1] ;
+        MJD >>=1; // Now we have a 17 bit date format
+
+        if(MJD < MJD_1ST_JANUARY_2019) // check if inpu is valid
+        {
+            return;
+        }
+        MJD -= MJD_1ST_JANUARY_2019; // normalize to 1st january of 2018
+
+        while( MJD >= DAYS_IN_YEAR)
+        {
+            counter++;
+
+            counter %= LEAP_YEAR_DISTANCE;
+
+            if(counter==0) // check if current year is a leap year
+            {
+                MJD-=DAYS_IN_YEAR;
+                is_leap_year = TRUE;
+            }
+            else if(is_leap_year) // check if last year was a leap year
+            {
+                MJD-=DAYS_IN_LEAP_YEAR;
+                is_leap_year = FALSE;
+            }
+            else
+            {
+                MJD-=DAYS_IN_YEAR;
+                is_leap_year = FALSE;
+            }
+            current_year++;
+        }
+
+        for(counter=0; counter < MONTHS_IN_YEAR;counter++)
+        {
+            uint8_t days = pgm_read_byte(&(days_of_month[counter]));
+            if(is_leap_year && counter == LEAP_MONTH)
+            {
+                if(MJD >= LEAP_MONTH_DAYS)
+                {
+                    MJD -= LEAP_MONTH_DAYS;
+                }
+                else
+                {
+                    current_month=counter+1;
+                    current_day = MJD+1;
+                    break;
+                }
+            }
+            else if(MJD > days)
+            {
+                MJD -= days;
+            }
+            else
+            {
+                current_month=counter+1;
+                current_day = MJD+1;
+                break;
+            }
+        }
+
+        buffer[0] = current_day;
+        buffer[1] = current_month;
+        buffer[2] = (current_year >> 8);
+        buffer[3] = (current_year & 0xFF);
     }
 }

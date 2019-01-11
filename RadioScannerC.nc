@@ -64,6 +64,7 @@ module RadioScannerC{
     uses interface Boot;
     uses interface BufferedLcd;
     uses interface FMClick;
+    uses interface Init as FMClick_init;
     uses interface Read<uint16_t> as ReadVolume;
     uses interface Glcd;
     uses interface Database;
@@ -111,8 +112,8 @@ implementation {
     char const PROGMEM add_note_text[] = "Add Note";
     char const PROGMEM input_frequency_text[] = "Input Frequency\nExample: 88.6 105.3";
     char const PROGMEM press_enter_text[] = "Press enter to save";
-    char const PRGOMEM format_not_satisfied[] = "Input format wrong";
-    char const PRGOMEM out_of_range[] = "Input out of range";
+    char const PROGMEM format_not_satisfied[] = "Input format wrong";
+    char const PROGMEM out_of_range[] = "Input out of range";
 
 
     task void display_list_task();
@@ -120,11 +121,21 @@ implementation {
     task void input_frquency_task();
     task void update_station_database();
 
+    void update_displays(void);
+    bool handle_display_states(char current_char);
+    void handle_display_list(char current_char);
+    void handle_input_favorite(char current_char);
+    void handle_input_note(char current_char);
+    void handle_input_frequency(char current_char);
+    void handle_help(void);
+    void handle_new_note(void);
+    void handle_new_frequency(void);
+
     event void Boot.booted(){
         call PS2.init();
         call BufferedLcd.clear();
         call BufferedLcd.forceRefresh();
-        call FMClick.init();
+        call FMClick_init.init();
         call Glcd.fill(0x00);
         call Scroll_Timer.startPeriodic(SCROLL_PERIOD_MS);
         call Volume_Timer.startPeriodic(VOLUME_SAMPLE_PERIOD_MS);
@@ -138,6 +149,8 @@ implementation {
             rds_info.radio_text[0]='\0';
             memset(favorite_list,0,FAVORITE_LIST_LENGTH);
         }
+
+        update_displays();
     }
 
     void task update_radio_time_task ()
@@ -242,7 +255,6 @@ implementation {
         call Glcd.drawText(note_output,0,RADIO_NOTE_LINE);
     }
 
-
     void task display_help_task()
     {
         call Glcd.drawTextPgm(help_string,0,10);
@@ -256,312 +268,13 @@ implementation {
             current_char = new_char;
         }
 
-        if(current_display_state == DISPLAY_LIST)
+        if(handle_display_states(current_char))
         {
-            if(current_char == '+')
-            {
-                uint8_t current_index = SCAN_PAGE_SIZE;
-                current_page++;
-                current_index*=current_page;
-
-                if(current_index >= SCAN_LIST_SIZE ||
-                     scan_list[current_index] ==0)
-                {
-                    current_page =0;
-                }
-
-                post display_list_task();
-            }
-            else if(current_char == '-')
-            {
-                if(current_page==0)
-                {
-
-                    current_page = SCAN_LIST_SIZE/SCAN_PAGE_SIZE -1;
-
-                    for(current_page = SCAN_LIST_SIZE/SCAN_PAGE_SIZE -1;
-                        current_page < SCAN_LIST_SIZE/SCAN_PAGE_SIZE; current_page--)
-                    {
-                        uint8_t current_index= current_page*SCAN_PAGE_SIZE;
-
-                        if(scan_list[current_index] != 0)
-                        {
-                            break;
-                        }
-                    }
-
-                    if(current_page >= SCAN_LIST_SIZE/SCAN_PAGE_SIZE)
-                    {
-                        current_page=0;
-                    }
-                }
-                else
-                {
-                    current_page--;
-                }
-                post display_list_task();
-            }
-            else if ( current_char >= '0' && current_char<='9')
-            {
-                uint16_t channel;
-                uint8_t index = current_page*SCAN_PAGE_SIZE;
-                index += ((uint8_t)current_char -0x30);
-                channel = scan_list[index];
-
-                atomic
-                {
-                    current_display_state = DISPLAY_FREE;
-                }
-
-                call FMClick.tune(channel);
-                call Glcd.fill(0x00);
-                call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
-            }
-            else if(current_char == 'l')
-            {
-                atomic
-                {
-                    current_display_state = DISPLAY_FREE;
-                }
-
-                call Glcd.fill(0x00);
-                post update_channel_task();
-                post update_radio_station_task();
-                post update_radio_time_task();
-                post update_note_task();
-                call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
-            }
-        }
-        else if(current_display_state == INPUT_FAVORITE)
-        {
-            // 0 adds channel to db
-            // 1-9 adds channel to favorites
-            if ( current_char >= '0' && current_char<='9')
-            {
-                uint8_t fav_pos = ((uint8_t)current_char -'0'), i;
-                uint16_t channel;
-                bool found =FALSE;
-                channelInfo ch_info, *ch_pointer;
-
-                ch_pointer = &ch_info;
-                ch_info.frequency = 0;
-
-                atomic
-                {
-                    channel = current_channel;
-                }
-
-                for(i=0; i< SCAN_LIST_SIZE;i++)
-                {
-                    if(scan_list[i] == channel)
-                    {
-                        found=TRUE;
-                        break;
-                    }
-                }
-
-                ch_info.quickDial = fav_pos;
-
-                if(found)
-                {
-                    call Database.saveChannel(i, ch_pointer);
-                }
-                else
-                {
-                    call Database.saveChannel(0xFF, ch_pointer);
-                }
-
-                if(fav_pos > 0)
-                {
-                    favorite_list[fav_pos] = channel;
-                }
-
-                atomic
-                {
-                    current_display_state = DISPLAY_FREE;
-                }
-            }
-        }
-        else if(current_display_state == INPUT_NOTE)
-        {
-            if(current_char == '\n')
-            {
-                atomic
-                {
-                    current_display_state = DISPLAY_FREE;
-                }
-
-                call Glcd.fill(0x00);
-
-                post update_radio_time_task();
-                post update_channel_task();
-                post update_radio_station_task();
-                post update_radio_text_task();
-                post update_note_task();
-
-                post update_station_database();
-
-            }
-            else if(current_char >= ' ' && current_char < 127) // 127 == delete char
-            {
-                uint8_t length = strlen(note);
-                if(length < RADIO_NOTE_LENGTH)
-                {
-                    note[length] = current_char;
-                    note[length+1] = '\0';
-                    post input_note_task();
-                }
-            }
-            else if(current_char == 127) // == delete char
-            {
-                uint8_t length = strlen(note);
-
-                if(length > 0)
-                {
-                    note[length-1] = '\0';
-                    post input_note_task();
-                }
-            }
-        }
-        else if(current_display_state == INPUT_FREQUENCY)
-        {
-            if(current_char == '\n')
-            {
-
-                bool seperator_found =FALSE;
-                bool format_wrong = FALSE;
-                bool added_100khz = FALSE;
-
-                uint8_t i;
-                uint16_t channel;
-
-                for(i=0; i< strlen(frequency_string); i++)
-                {
-                    char curr = frequency_string[i];
-
-                    if(curr >= '0' && curr <= '9')
-                    {
-                        if(!seperator_found)
-                        {
-                            channel *= 10;
-                        }
-                        else
-                        {
-                            if(added_100khz)
-                            {
-                                format_wrong = TRUE;
-                                break;
-                            }
-                            added_100khz = TRUE;
-                        }
-                        channel += (uint8_t) curr - '0';
-                    }
-                    else if(curr =='.')
-                    {
-                        if(seperator_found)
-                        {
-                            format_wrong = TRUE;
-                            break;
-                        }
-                        else
-                        {
-                            seperator_found=TRUE;
-                        }
-                    }
-                    else
-                    {
-                        format_wrong = TRUE;
-                        break;
-                    }
-                }
-
-                if(format_wrong)
-                {
-                    call Glcd.drawTextPgm(format_not_satisfied,0,INPUT_FRQUENCY_ERROR_LINE);
-                    return;
-                }
-
-                if(! seperator_found)
-                {
-                    channel *= 10;
-                }
-
-                if(channel < BAND_BOTTOM_100kHz || channel > BAND_TOP_100kHz)
-                {
-                    call Glcd.drawTextPgm(out_of_range,0,INPUT_FRQUENCY_ERROR_LINE);
-                    return;
-                }
-
-                channel -= BAND_BOTTOM_100kHz;
-
-                atomic
-                {
-                    current_display_state = DISPLAY_FREE;
-                }
-
-                call Glcd.fill(0x00);
-
-                post update_radio_time_task();
-                post update_channel_task();
-                post update_radio_station_task();
-                post update_radio_text_task();
-                post update_note_task();
-
-                // TODO: Tune
-                call FMClick.tune(channel);
-
-            }
-            else if((current_char >= '0' && current_char <='9') || current_char == '.') // 127 == delete char
-            {
-                uint8_t length = strlen(frequency_string);
-                if(frequency_string < FREQUENCY_INPUT_LENGTH)
-                {
-                    frequency_string[length] = current_char;
-                    frequency_string[length+1] = '\0';
-
-                    post input_frquency_task();
-                }
-            }
-            else if(current_char == 127) // == delete char
-            {
-                uint8_t length = strlen(note);
-
-                if(length > 0)
-                {
-                    note[length-1] = '\0';
-                    post input_frquency_task();
-                }
-            }
+            return;
         }
         else if(current_char == 'h' || current_char == 'H')
         {
-
-            call Glcd.fill(0x00);
-
-            if(current_display_state != DISPLAY_HELP)
-            {
-                atomic
-                {
-                    current_display_state = DISPLAY_HELP;
-                }
-                post display_help_task();
-            }
-            else
-            {
-                atomic
-                {
-                    current_display_state = DISPLAY_FREE;
-                }
-
-                current_radio_text_index = 0;
-                post update_channel_task();
-                post update_radio_station_task();
-                post update_radio_text_task();
-                post update_radio_time_task();
-                post update_note_task();
-
-                call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
-            }
+            handle_help();
         }
         else if(current_char == 'n')
         {
@@ -623,31 +336,12 @@ implementation {
         }
         else if(current_char == 'a' || current_char == 'A')
         {
-            atomic
-            {
-                current_display_state = INPUT_NOTE;
-            }
-
-            call Glcd.fill(0x00);
-            call Glcd.drawTextPgm(add_note_text,0,ADD_NOTE_LINE);
-            call Glcd.drawTextPgm(press_enter_text,0,ADD_NOTE_PRESS_ENTER_LINE);
-
-            post input_note_task();
+            handle_new_note();
         }
         else if(current_char == 't' || current_char == 'T')
         {
-            atomic
-            {
-                current_display_state = INPUT_FREQUENCY;
-            }
-
-            call Glcd.fill(0x00);
-            call Glcd.drawTextPgm(input_frequency_text,0,FREQUENCY_LINE);
-            call Glcd.drawTextPgm(press_enter_text,0,INPUT_FREQUENCY_PRESS_ENTER_LINE);
-
-            post input_frquency_task();
+            handle_new_frequency();
         }
-
     }
 
     void task enable_RDS_task()
@@ -1132,4 +826,357 @@ implementation {
 
     }
 
+    void update_displays(void)
+    {
+        post update_channel_task();
+        post update_radio_station_task();
+        post update_radio_text_task();
+        post update_radio_time_task();
+        post update_note_task();
+        
+    }
+
+    bool handle_display_states(char current_char)
+    {
+        bool display_state_handled = current_display_state != DISPLAY_FREE;
+       
+        if(current_display_state == DISPLAY_LIST)
+        {
+            handle_display_list(current_char);
+        }
+        else if(current_display_state == INPUT_FAVORITE)
+        {   
+            handle_input_favorite(current_char);
+        }
+        else if(current_display_state == INPUT_NOTE)
+        {
+            handle_input_note(current_char);
+        }
+        else if(current_display_state == INPUT_FREQUENCY)
+        {
+            handle_input_frequency(current_char);
+        }
+
+        return display_state_handled;
+    }
+
+    void handle_display_list(char current_char)
+    {
+        if(current_char == '+')
+        {
+            uint8_t current_index = SCAN_PAGE_SIZE;
+            current_page++;
+            current_index*=current_page;
+
+            if(current_index >= SCAN_LIST_SIZE ||
+                    scan_list[current_index] ==0)
+            {
+                current_page =0;
+            }
+
+            post display_list_task();
+        }
+        else if(current_char == '-')
+        {
+            if(current_page==0)
+            {
+
+                current_page = SCAN_LIST_SIZE/SCAN_PAGE_SIZE -1;
+
+                for(current_page = SCAN_LIST_SIZE/SCAN_PAGE_SIZE -1;
+                    current_page < SCAN_LIST_SIZE/SCAN_PAGE_SIZE; current_page--)
+                {
+                    uint8_t current_index= current_page*SCAN_PAGE_SIZE;
+
+                    if(scan_list[current_index] != 0)
+                    {
+                        break;
+                    }
+                }
+
+                if(current_page >= SCAN_LIST_SIZE/SCAN_PAGE_SIZE)
+                {
+                    current_page=0;
+                }
+            }
+            else
+            {
+                current_page--;
+            }
+            post display_list_task();
+        }
+        else if ( current_char >= '0' && current_char<='9')
+        {
+            uint16_t channel;
+            uint8_t index = current_page*SCAN_PAGE_SIZE;
+            index += ((uint8_t)current_char -0x30);
+            channel = scan_list[index];
+
+            atomic
+            {
+                current_display_state = DISPLAY_FREE;
+            }
+
+            call FMClick.tune(channel);
+            call Glcd.fill(0x00);
+            call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
+            update_displays();
+        }
+        else if(current_char == 'l')
+        {
+            atomic
+            {
+                current_display_state = DISPLAY_FREE;
+            }
+
+            call Glcd.fill(0x00);
+            update_displays();
+            call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
+        }
+    }
+
+    void handle_input_favorite(char current_char)
+    {
+        // 0 adds channel to db
+        // 1-9 adds channel to favorites
+        if ( current_char >= '0' && current_char<='9')
+        {
+            uint8_t fav_pos = ((uint8_t)current_char -'0'), i;
+            uint16_t channel;
+            bool found =FALSE;
+            channelInfo ch_info, *ch_pointer;
+
+            ch_pointer = &ch_info;
+            ch_info.frequency = 0;
+
+            atomic
+            {
+                channel = current_channel;
+            }
+
+            for(i=0; i< SCAN_LIST_SIZE;i++)
+            {
+                if(scan_list[i] == channel)
+                {
+                    found=TRUE;
+                    break;
+                }
+            }
+
+            ch_info.quickDial = fav_pos;
+
+            if(found)
+            {
+                call Database.saveChannel(i, ch_pointer);
+            }
+            else
+            {
+                call Database.saveChannel(0xFF, ch_pointer);
+            }
+
+            if(fav_pos > 0)
+            {
+                favorite_list[fav_pos] = channel;
+            }
+
+            atomic
+            {
+                current_display_state = DISPLAY_FREE;
+            }
+        }
+    }
+
+    void handle_input_note(char current_char)
+    {
+        if(current_char == '\n')
+        {
+            atomic
+            {
+                current_display_state = DISPLAY_FREE;
+            }
+
+            call Glcd.fill(0x00);
+
+            update_displays();
+
+            post update_station_database();
+
+        }
+        else if(current_char >= ' ' && current_char < 127) // 127 == delete char
+        {
+            uint8_t length = strlen(note);
+            if(length < RADIO_NOTE_LENGTH)
+            {
+                note[length] = current_char;
+                note[length+1] = '\0';
+                post input_note_task();
+            }
+        }
+        else if(current_char == 127) // == delete char
+        {
+            uint8_t length = strlen(note);
+
+            if(length > 0)
+            {
+                note[length-1] = '\0';
+                post input_note_task();
+            }
+        }
+    }
+
+    void handle_input_frequency(char current_char)
+    {
+        if(current_char == '\n')
+        {
+            bool seperator_found =FALSE;
+            bool format_wrong = FALSE;
+            bool added_100khz = FALSE;
+
+            uint8_t i;
+            uint16_t channel=0;
+
+            for(i=0; i< strlen(frequency_string); i++)
+            {
+                char curr = frequency_string[i];
+
+                if(curr >= '0' && curr <= '9')
+                {
+                    if(!seperator_found)
+                    {
+                        channel *= 10;
+                    }
+                    else
+                    {
+                        if(added_100khz)
+                        {
+                            format_wrong = TRUE;
+                            break;
+                        }
+                        added_100khz = TRUE;
+                    }
+                    channel += (uint8_t) curr - '0';
+                }
+                else if(curr =='.')
+                {
+                    if(seperator_found)
+                    {
+                        format_wrong = TRUE;
+                        break;
+                    }
+                    else
+                    {
+                        seperator_found=TRUE;
+                    }
+                }
+                else
+                {
+                    format_wrong = TRUE;
+                    break;
+                }
+            }
+
+            if(format_wrong)
+            {
+                call Glcd.drawTextPgm(format_not_satisfied,0,INPUT_FRQUENCY_ERROR_LINE);
+                return;
+            }
+
+            if(! seperator_found)
+            {
+                channel *= 10;
+            }
+
+            if(channel < BAND_BOTTOM_100kHz || channel > BAND_TOP_100kHz)
+            {
+                call Glcd.drawTextPgm(out_of_range,0,INPUT_FRQUENCY_ERROR_LINE);
+                return;
+            }
+
+            channel -= BAND_BOTTOM_100kHz;
+
+            atomic
+            {
+                current_display_state = DISPLAY_FREE;
+            }
+
+            call Glcd.fill(0x00);
+            update_displays();
+            call FMClick.tune(channel);
+        }
+        else if((current_char >= '0' && current_char <='9') || current_char == '.') // 127 == delete char
+        {
+            uint8_t length = strlen(frequency_string);
+            if(length < FREQUENCY_INPUT_LENGTH)
+            {
+                frequency_string[length] = current_char;
+                frequency_string[length+1] = '\0';
+
+                post input_frquency_task();
+            }
+        }
+        else if(current_char == 127) // == delete char
+        {
+            uint8_t length = strlen(note);
+
+            if(length > 0)
+            {
+                note[length-1] = '\0';
+                post input_frquency_task();
+            }
+        }
+    }
+
+    void handle_help(void)
+    {
+        call Glcd.fill(0x00);
+
+        if(current_display_state != DISPLAY_HELP)
+        {
+            atomic
+            {
+                current_display_state = DISPLAY_HELP;
+            }
+            post display_help_task();
+        }
+        else
+        {
+            atomic
+            {
+                current_display_state = DISPLAY_FREE;
+            }
+
+            current_radio_text_index = 0;
+            update_displays();
+
+            call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
+        }
+    }
+
+    void handle_new_note(void)
+    {
+        atomic
+        {
+            current_display_state = INPUT_NOTE;
+        }
+
+        call Glcd.fill(0x00);
+        call Glcd.drawTextPgm(add_note_text,0,ADD_NOTE_LINE);
+        call Glcd.drawTextPgm(press_enter_text,0,ADD_NOTE_PRESS_ENTER_LINE);
+
+        post input_note_task();
+    }
+
+    void handle_new_frequency(void)
+    {
+        atomic
+        {
+            current_display_state = INPUT_FREQUENCY;
+        }
+
+        call Glcd.fill(0x00);
+        call Glcd.drawTextPgm(input_frequency_text,0,FREQUENCY_LINE);
+        call Glcd.drawTextPgm(press_enter_text,0,INPUT_FREQUENCY_PRESS_ENTER_LINE);
+
+        post input_frquency_task();
+    }
 }

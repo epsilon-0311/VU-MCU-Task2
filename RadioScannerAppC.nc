@@ -17,12 +17,14 @@ implementation {
 
     components new HplAtm1280GeneralIOFastPortP((uint16_t)&PORTJ, (uint16_t)&DDRJ, (uint16_t)&PINJ) as Port2;
 
-
     RS.PS2 -> PS2C;
     RS.Boot -> MainC.Boot;
     RS.BufferedLcd -> BufferedLcdC;
     RS.ReadVolume -> VolumeAdcC.readVolume;
+
     RS.FMClick -> FMClickC;
+    RS.FMClick_init -> FMClickC;
+
     RS.Glcd ->GlcdC;
     RS.Scroll_Timer -> Scroll_Timer;
     RS.Volume_Timer -> Volume_Timer;

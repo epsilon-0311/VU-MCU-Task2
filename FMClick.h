@@ -1,5 +1,33 @@
 
+#ifndef __FM_CLICK_H__
+#define __FM_CLICK_H__
+
 #include <avr/io.h>
+
+#define DEVICE_ADDRESS 0x10
+
+#define RDS_TYPE_TUNING 0x0
+#define RDS_TYPE_RADIO_TEXT 0x2
+#define RDS_TYPE_TIME 0x4
+
+#define RDS_STATION_LENGTH 8
+#define RDS_STATION_
+#define RDS_TEXT_LENGTH_A 64
+#define RDS_TEXT_LENGTH_B 32
+
+#define START_YEAR 2019
+#define MJD_1ST_JANUARY_2019 58484u
+#define LEAP_YEAR_DISTANCE 4
+#define NEXT_LEAP_YEAR 1
+#define DAYS_IN_YEAR 365
+#define DAYS_IN_LEAP_YEAR 366
+#define MONTHS_IN_YEAR 12
+#define LEAP_MONTH 1 // starting at 0
+#define LEAP_MONTH_DAYS 29
+
+#define TIME_OFFSET_MINUTES 30
+#define MAX_MINUTES 59
+#define MAX_HOUR 23
 
 typedef union __sys_conf_1_t
 {
@@ -177,3 +205,6 @@ typedef enum
     FM_CLICK_TUNE,
     FM_CLICK_WAIT_WRITE_FINISH,
 } FMClick_operation_t;
+
+
+# endif
