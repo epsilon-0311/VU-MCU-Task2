@@ -539,7 +539,7 @@ implementation
         else if(length==12)
         {
 
-            memcpy(conf_registers.data_bytes, data, 12);
+            memcpy(data_registers.data_bytes, data, 12);
 
             handle_last_operation(current_operation_temp);
 
