@@ -7,9 +7,9 @@
 #define DATETIME_TIMER_MINUTE_MS 60000L
 #define VOLUME_SAMPLE_ARRAY_SIZE 5
 
-#define RADIO_SPACING_kHz 100
 #define BAND_TOP_100kHz 1080
 #define BAND_BOTTOM_100kHz 875
+#define MAX_CHANNEL BAND_TOP_100kHz-BAND_BOTTOM_100kHz
 
 #define SCAN_LIST_SIZE 32
 #define SCAN_PAGE_SIZE 10
@@ -295,6 +295,12 @@ implementation {
                 channel = current_channel;
             }
             channel++;
+
+            if(channel >= MAX_CHANNEL)
+            {
+                channel = 0;
+            }
+
             call FMClick.tune(channel);
         }
         else if(current_char == '-')
@@ -305,6 +311,12 @@ implementation {
                 channel = current_channel;
             }
             channel--;
+
+            if(channel > MAX_CHANNEL)
+            {
+                channel = MAX_CHANNEL;
+            }
+
             call FMClick.tune(channel);
         }
         else if(current_char == 's' || current_char == 'S')
