@@ -100,7 +100,7 @@ implementation {
         uint16_t current_op = call OpQueue.dequeue();
 
         memcpy(return_data, data, len);
-
+        
         if(strncmp_P(return_data, error_string, 4) == 0)
         {
             switch(current_op)
@@ -132,8 +132,10 @@ implementation {
             switch(current_op)
             {
                 case DATABASE_ADD:
+                    signal Database.savedChannel(0,0);
                     break;
                 case DATABASE_UPDATE:
+                    signal Database.savedChannel(0,0);
                     break;
                 case DATABASE_DELETE:
                     break;
@@ -243,7 +245,7 @@ implementation {
 
         if(strlen(channel->name) > 0)
         {
-            uint8_t i=strlen(channel->name)-1;
+            uint8_t i=strlen(channel->name);
             strcat_P(message, radio_info_key_name);
 
             for(; i<8; i++)
