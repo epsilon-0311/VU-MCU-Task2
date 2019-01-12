@@ -660,6 +660,7 @@ implementation {
     event void FMClick.initDone(error_t res)
     {
         post enable_RDS_task();
+        call FMClick.seek(TRUE);
     }
 
     async event void FMClick.tuneComplete(uint16_t channel)
