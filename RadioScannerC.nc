@@ -618,7 +618,7 @@ implementation {
     {
         static uint8_t length_last = 0;
 
-        uint8_t length = strlen(note);
+        uint8_t length = strlen(frequency_string);
 
         if(length < length_last)
         {
