@@ -15,6 +15,8 @@
 
 #define CHARS_IN_LINE 19
 
+#define SCANNING_TEXT_LINE 10
+
 #define RADIO_TIME_LINE 10
 #define RADIO_STATION_LINE 20
 #define RADIO_STATION_SPACER 64
@@ -57,6 +59,7 @@ typedef enum __display_state
     INPUT_FAVORITE,
     INPUT_NOTE,
     INPUT_FREQUENCY,
+    SCANNING,
 } DisplayState_t;
 
 module RadioScannerC{
@@ -114,6 +117,7 @@ implementation {
     char const PROGMEM press_enter_text[] = "Press enter to save";
     char const PROGMEM format_not_satisfied[] = "Input format wrong";
     char const PROGMEM out_of_range[] = "Input out of range";
+    char const PROGMEM scanning_channels[] = "Scanning Channels";
 
 
     task void display_list_task();
@@ -311,10 +315,12 @@ implementation {
             {
                 scan_running = TRUE;
                 scan_index=0;
+                current_display_state = SCANNING;
             }
 
             memset(scan_list,0,SCAN_LIST_SIZE);
-
+            call Glcd.fill(0x00);
+            call Glcd.drawTextPgm(scanning_channels, 0, SCANNING_TEXT_LINE);
             call Database.purgeChannelList();
         }
         else if(current_char == 'l' || current_char == 'L')
