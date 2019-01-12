@@ -698,96 +698,90 @@ implementation
 
         if( data_registers_temp.rdsb.data_bytes[0] & 0x08)
         {
+            index<<=1;
+            if(index != current_rds_text_index)
+            {
+                current_rds_text_index=0;
+                return;
+            }
+
             handle_radio_text_type_b(temp_buf, data_registers_temp, index);
         }
         else
         {
+            index <<= 2;
+            if(index != current_rds_text_index)
+            {
+                current_rds_text_index=0;
+                return;
+            }
+
             handle_radio_text_type_a(temp_buf, data_registers_temp, index);
         }
 
         strcat(rds_radio_text, temp_buf);
 
-        if(current_rds_text_index == 0 && rds_radio_text[0] != '\0')
+        if(current_rds_text_index == 0 && strlen(rds_radio_text) > 0)
         {
             signal FMClick.rdsReceived(RT, rds_radio_text);
         }
     }
 
-    void handle_radio_text_type_b(char *buffer, data_registers_t data_registers_temp, uint8_t index)
-    {
-        index <<= 1;
-        buffer[0] = (char)(data_registers_temp.rdsc.data_bytes[0] &0x7F);
-        buffer[1] = (char)(data_registers_temp.rdsc.data_bytes[1] &0x7F);
-        buffer[2] = '\0';
-
-        if(index != current_rds_text_index)
-        {
-            current_rds_text_index=0;
-            return;
-        }
-
-        if(buffer[0] == '\r')
-        {
-            buffer[0] = '\0';
-            current_rds_text_index = 0;
-        }
-        else if(buffer[1] == '\r')
-        {
-            buffer[1] = '\0';
-            current_rds_text_index = 0;
-        }
-        else if(current_rds_text_index +2 >= RDS_TEXT_LENGTH_B)
-        {
-            current_rds_text_index=0;
-        }
-        else
-        {
-            current_rds_text_index+=2;
-        }
-    }
-
     void handle_radio_text_type_a(char *buffer, data_registers_t data_registers_temp, uint8_t index)
     {
-        index<<=2;
+        uint8_t i;
+
         buffer[0] = (char)(data_registers_temp.rdsc.data_bytes[0] &0x7F);
         buffer[1] = (char)(data_registers_temp.rdsc.data_bytes[1] &0x7F);
         buffer[2] = (char)(data_registers_temp.rdsd.data_bytes[0] &0x7F);
         buffer[3] = (char)(data_registers_temp.rdsd.data_bytes[1] &0x7F);
         buffer[4] = '\0';
 
-        if(index != current_rds_text_index)
+        for(i=0; i<4; i++)
         {
-            current_rds_text_index=0;
-            return;
+            if(buffer[i] == '\r')
+            {
+                buffer[i] = '\0';
+                current_rds_text_index = 0;
+                return;
+            }
         }
 
-        if(buffer[0] == '\r')
-        {
-            buffer[0] = '\0';
-            current_rds_text_index = 0;
-        }
-        else if(buffer[1] == '\r')
-        {
-            buffer[1] = '\0';
-            current_rds_text_index = 0;
-        }
-        else if(buffer[2] == '\r')
-        {
-            buffer[2] = '\0';
-            current_rds_text_index = 0;
-        }
-        else if(buffer[3] == '\r')
-        {
-            buffer[3] = '\0';
-            current_rds_text_index = 0;
-        }
-        else if(current_rds_text_index + 4 >= RDS_TEXT_LENGTH_A)
+        if(current_rds_text_index + 4 >= RDS_TEXT_LENGTH_A)
         {
             current_rds_text_index=0;
         }
         else
         {
             current_rds_text_index+=4;
+        }
+    }
+
+    void handle_radio_text_type_b(char *buffer, data_registers_t data_registers_temp, uint8_t index)
+    {
+        uint8_t i;
+
+        buffer[0] = (char)(data_registers_temp.rdsc.data_bytes[0] &0x7F);
+        buffer[1] = (char)(data_registers_temp.rdsc.data_bytes[1] &0x7F);
+        buffer[2] = '\0';
+
+        for(i=0; i<2; i++)
+        {
+            if(buffer[i] == '\r')
+            {
+                buffer[i] = '\0';
+                current_rds_text_index = 0;
+                return;
+            }
+        }
+
+        if(current_rds_text_index +2 >= RDS_TEXT_LENGTH_B)
+        {
+            current_rds_text_index=0;
+        }
+        else
+        {
+            current_rds_text_index+=2;
         }
     }
 
