@@ -1069,66 +1069,69 @@ implementation {
 
             uint8_t i;
             uint16_t channel=0;
+            uint8_t length = strlen(frequency_string);
 
-            for(i=0; i< strlen(frequency_string); i++)
+            if(length > 0)
             {
-                char curr = frequency_string[i];
-
-                if(curr >= '0' && curr <= '9')
+                for(i=0; i< length; i++)
                 {
-                    if(!seperator_found)
-                    {
+                    char curr = frequency_string[i];
+
+                    if(curr >= '0' && curr <= '9')
+                    {   
                         channel *= 10;
+
+                        if(seperator_found)
+                        {
+                            if(added_100khz)
+                            {
+                                format_wrong = TRUE;
+                                break;
+                            }
+                            added_100khz = TRUE;
+                        }
+                        channel += (uint8_t) curr - '0';
                     }
-                    else
+                    else if(curr =='.')
                     {
-                        if(added_100khz)
+                        if(seperator_found)
                         {
                             format_wrong = TRUE;
                             break;
                         }
-                        added_100khz = TRUE;
+                        else
+                        {
+                            seperator_found=TRUE;
+                        }
                     }
-                    channel += (uint8_t) curr - '0';
-                }
-                else if(curr =='.')
-                {
-                    if(seperator_found)
+                    else
                     {
                         format_wrong = TRUE;
                         break;
                     }
-                    else
-                    {
-                        seperator_found=TRUE;
-                    }
                 }
-                else
+
+                if(format_wrong)
                 {
-                    format_wrong = TRUE;
-                    break;
+                    call Glcd.drawTextPgm(format_not_satisfied,0,INPUT_FRQUENCY_ERROR_LINE);
+                    return;
                 }
+
+                if(! seperator_found)
+                {
+                    channel *= 10;
+                }
+
+                if(channel < BAND_BOTTOM_100kHz || channel > BAND_TOP_100kHz)
+                {
+                    call Glcd.drawTextPgm(out_of_range,0,INPUT_FRQUENCY_ERROR_LINE);
+                    return;
+                }
+
+                channel -= BAND_BOTTOM_100kHz;
+                call FMClick.tune(channel);
             }
-
-            if(format_wrong)
-            {
-                call Glcd.drawTextPgm(format_not_satisfied,0,INPUT_FRQUENCY_ERROR_LINE);
-                return;
-            }
-
-            if(! seperator_found)
-            {
-                channel *= 10;
-            }
-
-            if(channel < BAND_BOTTOM_100kHz || channel > BAND_TOP_100kHz)
-            {
-                call Glcd.drawTextPgm(out_of_range,0,INPUT_FRQUENCY_ERROR_LINE);
-                return;
-            }
-
-            channel -= BAND_BOTTOM_100kHz;
-
+            
             atomic
             {
                 current_display_state = DISPLAY_FREE;
@@ -1136,7 +1139,7 @@ implementation {
 
             call Glcd.fill(0x00);
             update_displays();
-            call FMClick.tune(channel);
+            
         }
         else if((current_char >= '0' && current_char <='9') || current_char == '.') // 127 == delete char
         {
@@ -1151,11 +1154,11 @@ implementation {
         }
         else if(current_char == 127) // == delete char
         {
-            uint8_t length = strlen(note);
+            uint8_t length = strlen(frequency_string);
 
             if(length > 0)
             {
-                note[length-1] = '\0';
+                frequency_string[length-1] = '\0';
                 post input_frquency_task();
             }
         }
