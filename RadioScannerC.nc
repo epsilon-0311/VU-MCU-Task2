@@ -153,8 +153,9 @@ implementation {
         atomic
         {
             current_display_state = DISPLAY_FREE;
-            rds_info.radio_text[0]='\0';
             memset(favorite_list,0,FAVORITE_LIST_LENGTH);
+            memset(note, '\0', RADIO_NOTE_LENGTH);
+            memset(rds_info.radio_text, '\0', RADIO_TEXT_LENGTH);
         }
 
         update_displays();
