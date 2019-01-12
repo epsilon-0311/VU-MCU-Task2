@@ -11,9 +11,10 @@ module FMClickP{
     uses interface HplAtm128Interrupt as External_Interrupt;
     uses interface Timer<TMilli> as Timer;
 
-    uses interface GeneralIOPort as debug_out;
+    uses interface GeneralIOPort as rds_debug;
     uses interface GeneralIOPort as debug_out_2;
     uses interface GeneralIOPort as debug_out_3;
+    uses interface BufferedLcd;
 
     provides interface FMClick;
     provides interface Init;
@@ -33,10 +34,9 @@ implementation
     void handle_radio_text_type_a(char *buffer, data_registers_t data_registers_temp, uint8_t index);
     void handle_radio_text_type_b(char *buffer, data_registers_t data_registers_temp, uint8_t index);
     void decode_datetime(void);
-    void decode_date(char *buffer, data_registers_t data_registers_temp);
-    void decode_time(char *buffer, data_registers_t data_registers_temp);
+    error_t decode_date(char *buffer, data_registers_t data_registers_temp);
+    error_t decode_time(char *buffer, data_registers_t data_registers_temp);
     
-
     conf_registers_t conf_registers;
     data_registers_t data_registers;
 
@@ -58,7 +58,7 @@ implementation
     command error_t Init.init(void)
     {
         error_t check;
-        call debug_out.makeOutput(0xFF);
+        call rds_debug.makeOutput(0xFF);
         call debug_out_2.makeOutput(0xFF);
         call debug_out_3.makeOutput(0xFF);
 
@@ -324,16 +324,13 @@ implementation
             data_registers_temp =  data_registers;
         }
 
-        call debug_out.toggle(0x01);
+        call rds_debug.toggle(0x01);
 
-        if(data_registers_temp.rssi.RDSS &&
-            data_registers_temp.read_channel.BLERB <= 2 &&
-            data_registers_temp.read_channel.BLERC <= 2 &&
-            data_registers_temp.read_channel.BLERD <= 2)
-        {
-            
-        }
-        else
+        if(!(data_registers_temp.rssi.RDSS &&
+             data_registers_temp.read_channel.BLERB <= RDS_ALLOWED_ERRORS &&
+             data_registers_temp.read_channel.BLERC <= RDS_ALLOWED_ERRORS &&
+             data_registers_temp.read_channel.BLERD <= RDS_ALLOWED_ERRORS)
+        )
         {
             // not sufficient synced
             return;
@@ -346,17 +343,17 @@ implementation
         {
             case RDS_TYPE_TUNING:
                 rds = PS;
-                call debug_out.toggle(0x02);
+                call rds_debug.toggle(0x02);
                 break;
             case RDS_TYPE_RADIO_TEXT:
                 rds = RT;
-                call debug_out.toggle(0x04);
+                call rds_debug.toggle(0x04);
                 break;
             case RDS_TYPE_TIME:
                 if( ! (data_registers_temp.rdsb.data & 0x0800))
                 {
                     rds = TIME;
-                    call debug_out.toggle(0x08);
+                    call rds_debug.toggle(0x08);
                 }
                 else
                 {
@@ -369,7 +366,7 @@ implementation
 
         if(rds==TIME)
         {
-            
+            decode_datetime();
         }
         else if(rds == RT)
         {
@@ -682,18 +679,18 @@ implementation
         {
             current_rds_text_type=TRUE;
             current_rds_text_index =0;
-            rds_radio_text[0]='\0';
+            memset(rds_radio_text, '\0', RDS_TEXT_LENGTH_A);
         }
         else if((data_registers_temp.rdsb.data_bytes[1] & 0x10) == 0 && current_rds_text_type)
         {
             current_rds_text_type=FALSE;
             current_rds_text_index =0;
-            rds_radio_text[0]='\0';
+            memset(rds_radio_text, '\0', RDS_TEXT_LENGTH_A);
         }
 
         if(current_rds_text_index == 0)
         {
-            rds_radio_text[0] = '\0';
+            memset(rds_radio_text, '\0', RDS_TEXT_LENGTH_A);
         }
 
         if( data_registers_temp.rdsb.data_bytes[0] & 0x08)
@@ -704,7 +701,6 @@ implementation
                 current_rds_text_index=0;
                 return;
             }
-
             handle_radio_text_type_b(temp_buf, data_registers_temp, index);
         }
         else
@@ -715,7 +711,6 @@ implementation
                 current_rds_text_index=0;
                 return;
             }
-
             handle_radio_text_type_a(temp_buf, data_registers_temp, index);
         }
 
@@ -795,18 +790,31 @@ implementation
             data_registers_temp =  data_registers;
         }
                 
-        decode_time(&(rds_buffer[4]), data_registers_temp);
-        decode_date(rds_buffer, data_registers_temp);
-        
-        signal FMClick.rdsReceived(RDS_TYPE_TIME, rds_buffer);
+        if(decode_time(&(rds_buffer[4]), data_registers_temp) != SUCCESS)
+        {
+            return;
+        }
+
+        if(decode_date(rds_buffer, data_registers_temp) != SUCCESS)
+        {
+            return;
+        }
+    
+        signal FMClick.rdsReceived(TIME, rds_buffer);
     }
 
-    void decode_time(char *buffer, data_registers_t data_registers_temp)
+    error_t decode_time(char *buffer, data_registers_t data_registers_temp)
     {
         int8_t current_hour = data_registers_temp.rdsc.data_bytes[1] & 0x1;
         int8_t current_minute = data_registers_temp.rdsd.data_bytes[0] & 0xF;
         uint8_t time_offset = data_registers_temp.rdsd.data_bytes[1] & 0x1F;
         uint8_t temp = data_registers_temp.rdsd.data_bytes[0];
+
+        static uint8_t last_minute =0;
+        static uint8_t last_hour = 0;
+
+        error_t return_value = SUCCESS;
+        
 
         temp >>= 4;
 
@@ -871,12 +879,37 @@ implementation
                 current_hour = current_hour-MAX_HOUR;
             }
         }
-        
-        buffer[0] = current_hour;
-        buffer[1] = current_minute;
+
+        // initial state
+        if(last_minute == 0 && last_hour == 0)
+        {
+            buffer[0] = current_hour;
+            buffer[1] = current_minute;
+        }
+        else if(current_hour > MAX_HOUR || current_minute > MAX_MINUTES)
+        {
+            return_value =  FAIL;
+        }
+        else if((current_hour - last_hour >= TOLERANCE_HOURS ||
+                current_minute - last_minute >= TOLERANCE_MINUTES) &&
+                current_minute > 0
+        )
+        {
+            return_value =  FAIL;
+        }
+        else
+        {
+            buffer[0] = current_hour;
+            buffer[1] = current_minute;
+        }
+
+        last_minute = current_minute;
+        last_hour   = current_hour;
+
+        return return_value;
     }
 
-    void decode_date(char *buffer, data_registers_t data_registers_temp)
+    error_t decode_date(char *buffer, data_registers_t data_registers_temp)
     {
         uint32_t MJD = (data_registers_temp.rdsb.data_bytes[1] ) & 0x03; // Modified Julanian day
 
@@ -885,6 +918,11 @@ implementation
         uint8_t current_day =0;
         bool is_leap_year = FALSE;
         uint8_t counter=NEXT_LEAP_YEAR;
+        static uint16_t last_year =0;
+        static uint8_t last_month =0;
+        static uint8_t last_day = 0;
+
+        error_t return_value = SUCCESS;
 
         MJD <<=8;
         MJD |= data_registers_temp.rdsc.data_bytes[0] ;
@@ -894,7 +932,7 @@ implementation
 
         if(MJD < MJD_1ST_JANUARY_2019) // check if inpu is valid
         {
-            return;
+            return FAIL;
         }
         MJD -= MJD_1ST_JANUARY_2019; // normalize to 1st january of 2018
 
@@ -950,9 +988,39 @@ implementation
             }
         }
 
-        buffer[0] = current_day;
-        buffer[1] = current_month;
-        buffer[2] = (current_year >> 8);
-        buffer[3] = (current_year & 0xFF);
+        if(last_year == 0 && last_month == 0 && last_day ==0)
+        {
+            // initial state
+            buffer[0] = current_day;
+            buffer[1] = current_month;
+            buffer[2] = (current_year >> 8);
+            buffer[3] = (current_year & 0xFF);
+
+        }
+        else if(current_month >= MONTHS_IN_YEAR || current_day > MAX_DAYS_IN_MONTH)
+        {
+            return_value = FAIL;
+        }
+        else if((current_year - last_year > TOLERANCE_YEARS ||
+                current_month - last_month > TOLERANCE_MONTHS ||
+                current_day - last_day > TOLERANCE_DAYS) &&
+                current_day > 0
+        )
+        {
+            return_value = FAIL;
+        }
+        else
+        {
+            buffer[0] = current_day;
+            buffer[1] = current_month;
+            buffer[2] = (current_year >> 8);
+            buffer[3] = (current_year & 0xFF);
+        }
+        
+        last_year = current_year;
+        last_month= current_month;
+        last_day  = current_day;
+
+        return return_value;
     }
 }

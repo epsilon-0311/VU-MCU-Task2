@@ -10,8 +10,13 @@
 #define RDS_TYPE_RADIO_TEXT 0x2
 #define RDS_TYPE_TIME 0x4
 
+#define RDS_ALLOWED_ERRORS 2 
+// 0: No Errors allowd
+// 1: 1-2 Errors, correctable
+// 2: 3-5 Errors, correctable
+// 3: 6+ Error, uncorrectable, dont use!!!
+
 #define RDS_STATION_LENGTH 8
-#define RDS_STATION_
 #define RDS_TEXT_LENGTH_A 64
 #define RDS_TEXT_LENGTH_B 32
 
@@ -28,6 +33,13 @@
 #define TIME_OFFSET_MINUTES 30
 #define MAX_MINUTES 59
 #define MAX_HOUR 23
+#define MAX_DAYS_IN_MONTH 31
+
+#define TOLERANCE_HOURS 1
+#define TOLERANCE_MINUTES 10
+#define TOLERANCE_YEARS 1
+#define TOLERANCE_MONTHS 1
+#define TOLERANCE_DAYS 1
 
 typedef union __sys_conf_1_t
 {
