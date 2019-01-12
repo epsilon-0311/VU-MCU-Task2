@@ -483,6 +483,11 @@ implementation
         }
     }
 
+    void task seek_tune_timer_task()
+    {
+        call Timer.startOneShot(40);
+    }
+
     event void I2C_Resource.granted()
     {
         call Timer.startOneShot(1);
@@ -511,7 +516,8 @@ implementation
         {
             atomic
             {
-                current_operation = FM_CLICK_IDLE;
+                current_operation = FM_CLICK_WAIT_FOR_CLEAR;
+                post get_data_from_chip_task();
             }
         }
     }
@@ -569,11 +575,25 @@ implementation
 
     event void Timer.fired()
     {
-        post init_task();
+        FMClick_operation_t operation;
+        atomic
+        {
+            operation = current_operation;
+        }
+
+        if(operation == FM_CLICK_WAIT_FOR_CLEAR)
+        {
+            post get_data_from_chip_task();
+        }
+        else
+        {
+            post init_task();
+        }
     }
 
     void handle_last_operation(FMClick_operation_t operation)
     {
+        
         switch(operation)
             {
                 case FM_CLICK_IDLE: // nothing to do
@@ -584,6 +604,7 @@ implementation
                     {
                         uint16_t channel;
 
+                        
                         conf_registers.channel.CHANNEL_H = data_registers.read_channel.CHANNEL_H;
                         conf_registers.channel.CHANNEL_L = data_registers.read_channel.CHANNEL_L;
 
@@ -595,14 +616,20 @@ implementation
                         {
                             current_operation = FM_CLICK_WAIT_WRITE_FINISH;
                         }
-                        channel = conf_registers.channel.CHANNEL_H;
-                        channel <<= 8;
-                        channel |= conf_registers.channel.CHANNEL_L;
+                        
+                        if(!data_registers.rssi.SF_BL)
+                        {
+                            channel = conf_registers.channel.CHANNEL_H;
+                            channel <<= 8;
+                            channel |= conf_registers.channel.CHANNEL_L;
 
-                        signal FMClick.tuneComplete(channel);
+                            signal FMClick.tuneComplete(channel);
+                        }                        
                     }
+                    
                     break;
                 case FM_CLICK_TUNE:
+                    
                     if(data_registers.rssi.STC)
                     {
                         uint16_t channel;
@@ -620,6 +647,19 @@ implementation
                         channel |= conf_registers.channel.CHANNEL_L;
 
                         signal FMClick.tuneComplete(channel);
+                    }
+                    break;
+                case FM_CLICK_WAIT_FOR_CLEAR:
+                    if(data_registers.rssi.STC)
+                    {
+                        post seek_tune_timer_task();
+                    }
+                    else
+                    {
+                        atomic
+                        {
+                            current_operation = FM_CLICK_IDLE;
+                        }
                     }
                     break;
             }

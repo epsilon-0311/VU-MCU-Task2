@@ -204,6 +204,7 @@ typedef enum
     FM_CLICK_SEEK,
     FM_CLICK_TUNE,
     FM_CLICK_WAIT_WRITE_FINISH,
+    FM_CLICK_WAIT_FOR_CLEAR,
 } FMClick_operation_t;
 
 
