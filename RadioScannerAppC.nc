@@ -14,6 +14,7 @@ implementation {
     components DatabaseC;
     components new TimerMilliC() as Scroll_Timer;
     components new TimerMilliC() as Volume_Timer;
+    components new TimerMilliC() as DateTime_Timer;
 
     components new HplAtm1280GeneralIOFastPortP((uint16_t)&PORTJ, (uint16_t)&DDRJ, (uint16_t)&PINJ) as Port2;
 
@@ -28,6 +29,8 @@ implementation {
     RS.Glcd ->GlcdC;
     RS.Scroll_Timer -> Scroll_Timer;
     RS.Volume_Timer -> Volume_Timer;
+    RS.DateTime_Timer -> DateTime_Timer;
+
     RS.Database -> DatabaseC;
 
     RS.debug_out_2 -> Port2;

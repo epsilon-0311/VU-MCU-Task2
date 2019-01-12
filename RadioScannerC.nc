@@ -4,6 +4,7 @@
 
 #define SCROLL_PERIOD_MS 1500
 #define VOLUME_SAMPLE_PERIOD_MS 100
+#define DATETIME_TIMER_MINUTE_MS 60000L
 #define VOLUME_SAMPLE_ARRAY_SIZE 5
 
 #define RADIO_SPACING_kHz 100
@@ -73,6 +74,7 @@ module RadioScannerC{
     uses interface Database;
     uses interface Timer<TMilli> as Scroll_Timer;
     uses interface Timer<TMilli> as Volume_Timer;
+    uses interface Timer<TMilli> as DateTime_Timer;
 
     uses interface GeneralIOPort as debug_out_2;
 }
@@ -143,6 +145,7 @@ implementation {
         call Glcd.fill(0x00);
         call Scroll_Timer.startPeriodic(SCROLL_PERIOD_MS);
         call Volume_Timer.startPeriodic(VOLUME_SAMPLE_PERIOD_MS);
+        call DateTime_Timer.startPeriodic(DATETIME_TIMER_MINUTE_MS);
         call Database.getChannelList(0);
 
         current_radio_text_index=0;
@@ -641,6 +644,12 @@ implementation {
         length_last = strlen(frequency_string);
     }
 
+    task void date_time_task()
+    {
+        call DateTime_Timer.stop();
+        call DateTime_Timer.startPeriodic(DATETIME_TIMER_MINUTE_MS);
+    }
+
     async event void PS2.receivedChar(uint8_t chr){
         atomic
         {
@@ -784,6 +793,25 @@ implementation {
     event void Volume_Timer.fired()
     {
         call ReadVolume.read();
+    }
+
+    event void DateTime_Timer.fired()
+    {
+        
+        atomic
+        {
+            if(++rds_info.current_minute >= 60)
+            {
+                rds_info.current_minute = 0;
+                if(++rds_info.current_hour >= 24)
+                {
+                    rds_info.current_hour =0;
+                }
+            }
+
+            post update_radio_time_task();
+        }
+
     }
 
 
