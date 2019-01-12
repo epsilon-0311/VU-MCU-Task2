@@ -574,6 +574,12 @@ implementation {
     {
         uint16_t channel;
         uint8_t i;
+        bool found = FALSE;
+
+        channelInfo ch_info, *ch_pointer;
+        char temp[RADIO_STATION_LENGTH+1];
+        char note_temp[RADIO_NOTE_LENGTH+1];
+
         atomic
         {
             channel = current_channel;
@@ -583,27 +589,30 @@ implementation {
         {
             if(scan_list[i] == channel)
             {
-                channelInfo ch_info, *ch_pointer;
-                char temp[RADIO_STATION_LENGTH+1];
-                char note_temp[RADIO_NOTE_LENGTH+1];
-                ch_pointer = &ch_info;
-                ch_info.name = temp;
-                ch_info.notes = note_temp;
-                ch_info.quickDial = 0xFF;
-                atomic
-                {
-                    (void)strcpy(ch_info.name, rds_info.radio_station);
-                }
-
-                ch_info.frequency = channel+BAND_BOTTOM_100kHz;
-
-                strcpy(ch_info.notes, note);
-
-                call Database.saveChannel(i, ch_pointer);
-
+                found = TRUE;
                 break;
             }
         }
+
+        if(!found)
+        {
+            i = 0xFF;
+        }
+
+        ch_pointer = &ch_info;
+        ch_info.name = temp;
+        ch_info.notes = note_temp;
+        ch_info.quickDial = 0xFF;
+        atomic
+        {
+            (void)strcpy(ch_info.name, rds_info.radio_station);
+        }
+
+        ch_info.frequency = channel+BAND_BOTTOM_100kHz;
+
+        strcpy(ch_info.notes, note);
+
+        call Database.saveChannel(i, ch_pointer);
     }
 
     task void input_note_task()
