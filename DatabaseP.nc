@@ -315,8 +315,6 @@ implementation {
         char get_format[length];
         char get_string[length+5];
 
-        call debug_out_3.toggle(0xFF);
-
         strcpy_P(get_format, get_entry_format_string);
         sprintf(get_string, get_format, id);
 
