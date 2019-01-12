@@ -695,10 +695,17 @@ implementation {
         {
             old_channel = current_channel;
             current_channel = channel;
-            memset(rds_info.radio_station,'\0',RADIO_STATION_LENGTH);
-            memset(rds_info.radio_text,'\0',RADIO_TEXT_LENGTH);
-            memset(note, '\0', RADIO_NOTE_LENGTH);
             index = scan_index;
+        }
+
+        if(channel != old_channel)
+        {
+            atomic
+            {
+                memset(rds_info.radio_station,'\0',RADIO_STATION_LENGTH);
+                memset(rds_info.radio_text,'\0',RADIO_TEXT_LENGTH);
+                memset(note, '\0', RADIO_NOTE_LENGTH);
+            }
         }
 
         if(scan_running)
