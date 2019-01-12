@@ -1001,6 +1001,10 @@ implementation {
                     found=TRUE;
                     break;
                 }
+                else if(scan_list[i] == 0)
+                {
+                    break;
+                }
             }
 
             ch_info.quickDial = fav_pos;
@@ -1008,6 +1012,7 @@ implementation {
             if(found)
             {
                 call Database.saveChannel(i, ch_pointer);
+                scan_list[i] = channel;
             }
             else
             {
