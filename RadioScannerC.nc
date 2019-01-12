@@ -429,11 +429,17 @@ implementation {
     {
         uint8_t i;
         uint8_t offset;
+        DisplayState_t display_state;
         char entry_format[35];
         char list_output[CHARS_IN_LINE*SCAN_PAGE_SIZE+1]; // +1 Nullterminator
         list_output[0] = '\0'; // set first char to null Nullterminator -> easier use of strcat
 
-        if(current_display_state != DISPLAY_LIST)
+        atomic
+        {
+            display_state = current_display_state;
+        }
+
+        if(display_state != DISPLAY_LIST)
         {
             current_page = 0;
         }
@@ -710,13 +716,15 @@ implementation {
 
         if(scan_running)
         {
+
             if(old_channel > channel && index > 0)
             {
-                post display_list_task();
                 atomic
                 {
                     scan_running = FALSE;
+                    current_display_state = DISPLAY_FREE;
                 }
+                post display_list_task();
             }
             else
             {
@@ -725,11 +733,9 @@ implementation {
         }
         else if(current_display_state == DISPLAY_FREE)
         {
-            post update_radio_station_task();
-            post update_radio_text_task();
-            post update_channel_task();
+            update_displays();
         }
-
+        
         if(!scan_running)
         {
             post check_in_database_task();
@@ -738,6 +744,12 @@ implementation {
 
     async event void FMClick.rdsReceived(RDSType type, char *buf)
     {
+        DisplayState_t display_state;
+
+        atomic
+        {
+            display_state = current_display_state;
+        }
 
         if(type == PS)
         {
@@ -756,7 +768,7 @@ implementation {
                     strcpy (rds_info.radio_station, buf);
                 }
 
-                if(current_display_state == DISPLAY_FREE)
+                if(display_state == DISPLAY_FREE)
                 {
                     post update_radio_station_task();
                 }
@@ -766,15 +778,22 @@ implementation {
 
         }
         else if(type == RT)
-        {
+        {   
+
             atomic
             {
                 strcpy (rds_info.radio_text,buf);
+            }
+            
+            if(display_state == DISPLAY_FREE)
+            {
+                post update_radio_text_task();
             }
         }
         else if(type == TIME)
         {
             uint8_t temp = (uint8_t)buf[3];
+            post date_time_task();
 
             atomic
             {
@@ -789,7 +808,7 @@ implementation {
                 rds_info.current_minute = (uint8_t)buf[5];
             }
 
-            if(current_display_state == DISPLAY_FREE)
+            if(display_state == DISPLAY_FREE)
             {
                 post update_radio_time_task();
             }
@@ -834,7 +853,13 @@ implementation {
     {
         uint16_t new_channel = channel.frequency;
         uint16_t current_channel_temp;
-
+        DisplayState_t display_state;
+        
+        atomic
+        {
+            display_state = current_display_state;
+        }
+        
         new_channel-=BAND_BOTTOM_100kHz;
 
         atomic
@@ -850,7 +875,7 @@ implementation {
                 strcpy (note, channel.notes);
             }
 
-            if(current_display_state == DISPLAY_FREE)
+            if(display_state == DISPLAY_FREE)
             {
                 post update_note_task();
                 post update_radio_station_task();
@@ -1194,18 +1219,25 @@ implementation {
     }
 
     void handle_help(void)
-    {
+    {   
+        DisplayState_t display_state;
+
+        atomic
+        {
+            display_state = current_display_state;
+        }
+
         call Glcd.fill(0x00);
 
-        if(current_display_state != DISPLAY_HELP)
+        if(display_state == DISPLAY_FREE)
         {
             atomic
             {
                 current_display_state = DISPLAY_HELP;
             }
-            post display_help_task();
+            call Glcd.drawTextPgm(help_string,0,10);
         }
-        else
+        else if(display_state == DISPLAY_HELP)
         {
             atomic
             {
@@ -1214,8 +1246,6 @@ implementation {
 
             current_radio_text_index = 0;
             update_displays();
-
-            call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
         }
     }
 
