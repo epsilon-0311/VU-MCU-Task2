@@ -817,10 +817,25 @@ implementation {
 
     event void Scroll_Timer.fired()
     {
-        if(current_display_state == DISPLAY_FREE)
+        DisplayState_t display_state;
+        
+        atomic
         {
-            post update_radio_text_task();
-            post update_note_task();
+            display_state = current_display_state;
+        }
+
+        if(display_state == DISPLAY_FREE)
+        {
+
+            if(strlen(rds_info.radio_text)>CHARS_IN_LINE)
+            {
+                post update_radio_text_task();
+            }
+
+            if(strlen(note)>CHARS_IN_LINE)
+            {
+                post update_note_task();
+            }
         }
     }
 
