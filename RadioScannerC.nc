@@ -263,11 +263,6 @@ implementation {
         call Glcd.drawText(note_output,0,RADIO_NOTE_LINE);
     }
 
-    void task display_help_task()
-    {
-        call Glcd.drawTextPgm(help_string,0,10);
-    }
-
     void task received_char_task()
     {
         char current_char;
@@ -869,26 +864,36 @@ implementation {
         post update_radio_text_task();
         post update_radio_time_task();
         post update_note_task();
-        
+
+        call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
     }
 
     bool handle_display_states(char current_char)
-    {
-        bool display_state_handled = current_display_state != DISPLAY_FREE;
-       
-        if(current_display_state == DISPLAY_LIST)
+    {   
+        DisplayState_t display_state;
+        bool display_state_handled;
+
+        atomic
+        {
+            display_state = current_display_state;
+        }
+
+        display_state_handled  = display_state != DISPLAY_FREE;
+        display_state_handled &= display_state != DISPLAY_HELP;
+
+        if(display_state == DISPLAY_LIST)
         {
             handle_display_list(current_char);
         }
-        else if(current_display_state == INPUT_FAVORITE)
+        else if(display_state == INPUT_FAVORITE)
         {   
             handle_input_favorite(current_char);
         }
-        else if(current_display_state == INPUT_NOTE)
+        else if(display_state == INPUT_NOTE)
         {
             handle_input_note(current_char);
         }
-        else if(current_display_state == INPUT_FREQUENCY)
+        else if(display_state == INPUT_FREQUENCY)
         {
             handle_input_frequency(current_char);
         }
@@ -955,7 +960,7 @@ implementation {
 
             call FMClick.tune(channel);
             call Glcd.fill(0x00);
-            call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
+            
             update_displays();
         }
         else if(current_char == 'l')
@@ -967,7 +972,6 @@ implementation {
 
             call Glcd.fill(0x00);
             update_displays();
-            call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
         }
     }
 
