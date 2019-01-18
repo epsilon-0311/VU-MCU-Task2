@@ -1160,11 +1160,18 @@ implementation {
             uint8_t fav_pos = ((uint8_t)current_char -'0'), i;
             uint16_t channel;
             bool found =FALSE;
+            char station_temp[1];
+            char note_temp[1];
             channelInfo ch_info, *ch_pointer;
 
             ch_pointer = &ch_info;
             ch_info.frequency = 0;
+            ch_info.notes = note_temp;
+            ch_info.name = station_temp;
 
+            station_temp[0]= '\0';
+            note_temp[0]= '\0';
+            
             atomic
             {
                 channel = current_channel;
