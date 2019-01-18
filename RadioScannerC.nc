@@ -1071,16 +1071,18 @@ implementation {
                 }
                 else if(scan_list[i] == 0)
                 {
+                    // if 0, reached end of list
+                    // and channel will be added to list
                     break;
                 }
             }
 
             ch_info.quickDial = fav_pos;
+            scan_list[i] = channel;
 
             if(found)
             {
                 call Database.saveChannel(i, ch_pointer);
-                scan_list[i] = channel;
             }
             else
             {
@@ -1089,6 +1091,19 @@ implementation {
 
             if(fav_pos > 0)
             {
+                if(favorite_list[fav_pos] == 0)
+                {
+                    for(i=0; i< SCAN_LIST_SIZE;i++)
+                    {
+                        if(scan_list[i] == channel)
+                        {
+                            ch_info.quickDial = 0;
+                            call Database.saveChannel(i, ch_pointer);
+                            found=TRUE;
+                            break;
+                        }
+                    }
+                }
                 favorite_list[fav_pos] = channel;
             }
 

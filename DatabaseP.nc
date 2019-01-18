@@ -259,7 +259,7 @@ implementation {
             strcat(message, ",");
         }
 
-        if(channel->quickDial > 0 && channel->quickDial < 10)
+        if(channel->quickDial < 10)
         {
             char qdial_buffer [2];
             strcat_P(message, radio_info_key_qdial);
