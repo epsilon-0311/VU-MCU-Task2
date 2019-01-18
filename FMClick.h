@@ -212,11 +212,16 @@ typedef enum {
 
 typedef enum
 {
-    FM_CLICK_IDLE,
-    FM_CLICK_SEEK,
-    FM_CLICK_TUNE,
-    FM_CLICK_WAIT_WRITE_FINISH,
-    FM_CLICK_WAIT_FOR_CLEAR,
+    FM_CLICK_IDLE               = 0,
+    FM_CLICK_SEEK_START         = 1,
+    FM_CLICK_SEEK_WAIT          = 2,
+    FM_CLICK_TUNE_START         = 3,
+    FM_CLICK_TUNE_WAIT          = 4,
+    FM_CLICK_VOLUME             = 5,
+    FM_CLICK_RDS                = 6,
+    FM_CLICK_GET_RDS            = 7,
+    FM_CLICK_WAIT_WRITE_FINISH  = 8,
+    FM_CLICK_WAIT_FOR_CLEAR     = 9,
 } FMClick_operation_t;
 
 

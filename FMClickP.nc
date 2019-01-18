@@ -27,9 +27,9 @@ implementation
     void task write_conf_to_chip_task();
     void task send_initial_conf_task();
     void task rds_task();
+    void task request_ressource_task();
 
     void handle_last_operation(FMClick_operation_t operation);
-
     void decode_radio_text(void);
     void handle_radio_text_type_a(char *buffer, data_registers_t data_registers_temp, uint8_t index);
     void handle_radio_text_type_b(char *buffer, data_registers_t data_registers_temp, uint8_t index);
@@ -44,10 +44,9 @@ implementation
     FMClick_operation_t current_operation;
 
     uint8_t i2c_buffer[32];
-    uint8_t sync_state;
 
     bool i2c_in_use;
-    bool debug_read;
+    bool rds_pending;
     uint8_t const PROGMEM days_of_month[] = {31,28,31,30,31,30,31,31,30,31,30,31};
     char rds_radio_text[RDS_TEXT_LENGTH_A+1]; // +1 for nul char
     uint8_t current_rds_text_index;
@@ -57,7 +56,6 @@ implementation
 
     command error_t Init.init(void)
     {
-        error_t check;
         call rds_debug.makeOutput(0xFF);
         call debug_out_2.makeOutput(0xFF);
         call debug_out_3.makeOutput(0xFF);
@@ -82,14 +80,7 @@ implementation
         rds_radio_station[0] = '\0';
         rds_radio_text[0] = '\0';
 
-        check = call I2C_Resource.request();
-        if(check != SUCCESS)
-        {
-            printf("Radio failed");
-            return FAIL;
-        }
-
-        sync_state = 0;
+        call Timer.startOneShot(1);
 
         call External_Interrupt.edge(FALSE);
         call External_Interrupt.enable();
@@ -99,47 +90,65 @@ implementation
 
     command error_t FMClick.tune(uint16_t channel)
     {
+        FMClick_init_state_t init_state_temp;
+        FMClick_operation_t current_operation_temp;
+
+        atomic
+        {
+            init_state_temp = init_state;
+            current_operation_temp = current_operation;
+        }
+
+        if(init_state_temp != FM_CLICK_READY ||
+           current_operation_temp != FM_CLICK_IDLE)
+        {
+            return FAIL;
+        }
+
         atomic
         {
 
-            if(current_operation != FM_CLICK_IDLE)
-            {
-                return FAIL;
-            }
-            else
-            {
-                current_operation = FM_CLICK_TUNE;
-            }
-
+            current_operation = FM_CLICK_TUNE_START;
+            
             conf_registers.channel.CHANNEL_L = channel&0xFF;
             conf_registers.channel.CHANNEL_H = (channel >> 8) & 0x03;
             conf_registers.channel.TUNE = 1;
         }
 
-        post write_conf_to_chip_task();
-
+        post request_ressource_task();
         return SUCCESS;
 
     }
 
     command error_t FMClick.seek(bool up)
     {
+        FMClick_init_state_t init_state_temp;
+        FMClick_operation_t current_operation_temp;
+
         atomic
         {
-            if(current_operation != FM_CLICK_IDLE)
-            {
-                return FAIL;
-            }
-            else
-            {
-                current_operation = FM_CLICK_SEEK;
-            }
+            init_state_temp = init_state;
+            current_operation_temp = current_operation;
+        }
 
+        if(init_state_temp != FM_CLICK_READY ||
+           current_operation_temp != FM_CLICK_IDLE)
+        {
+            call debug_out_2.clear(0xFF);
+            call debug_out_2.set(current_operation_temp);
+
+            return FAIL;
+        }
+
+        atomic
+        {
+            current_operation = FM_CLICK_SEEK_START;
+            
             conf_registers.power_conf.SEEK = 1;
             conf_registers.power_conf.SEEKUP = up;
-
-            post write_conf_to_chip_task();
         }
+        
+        post request_ressource_task();
 
         return SUCCESS;
     }
@@ -156,49 +165,63 @@ implementation
 
     command error_t FMClick.setVolume(uint8_t volume)
     {
+        FMClick_init_state_t init_state_temp;
         FMClick_operation_t current_operation_temp;
 
         atomic
         {
+            init_state_temp = init_state;
             current_operation_temp = current_operation;
         }
 
-        if(current_operation_temp != FM_CLICK_IDLE)
+        if(init_state_temp != FM_CLICK_READY ||
+           current_operation_temp != FM_CLICK_IDLE)
         {
             return FAIL;
         }
 
         atomic
         {
+            current_operation = FM_CLICK_VOLUME;
             conf_registers.system_configuration_2.VOLUME = volume;
         }
 
-        post write_conf_to_chip_task();
+        post request_ressource_task();
 
         return SUCCESS;
     }
 
     command error_t FMClick.receiveRDS(bool enable)
     {
+        FMClick_init_state_t init_state_temp;
         FMClick_operation_t current_operation_temp;
 
         atomic
         {
+            init_state_temp = init_state;
             current_operation_temp = current_operation;
         }
 
-        if(current_operation_temp != FM_CLICK_IDLE)
+        if(init_state_temp != FM_CLICK_READY ||
+           current_operation_temp != FM_CLICK_IDLE)
         {
             return FAIL;
         }
 
         atomic
         {
+            current_operation = FM_CLICK_RDS;
             conf_registers.system_configuration_1.RDS = enable;
         }
 
-        post write_conf_to_chip_task();
+        post request_ressource_task();
+
         return SUCCESS;
+    }
+
+    error_t I2C_get(void)
+    {
+        
     }
 
     // send config
@@ -214,15 +237,19 @@ implementation
         if(!i2c_in_use_temp)
         {
             error_t check;
-            atomic
-            {
-                i2c_in_use=TRUE;
-            }
+            
             // 11 bytes are enough, low byte of test1 shouldn't be touched
             check = call I2C.write(I2C_START | I2C_STOP, DEVICE_ADDRESS ,10, conf_registers.data_bytes);
             if(check != SUCCESS)
             {
                  post write_conf_to_chip_task();
+            }
+            else
+            {
+                atomic
+                {
+                    i2c_in_use=TRUE;
+                }
             }
         }
         else
@@ -243,15 +270,19 @@ implementation
         if(!i2c_in_use_temp)
         {
             error_t check;
-            atomic
-            {
-                i2c_in_use=TRUE;
-            }
+            
             // 11 bytes are enough, low byte of test1 shouldn't be touched
             check = call I2C.write(I2C_START, DEVICE_ADDRESS ,12, conf_registers.data_bytes);
             if(check != SUCCESS)
             {
                  post write_conf_to_chip_task();
+            }
+            else
+            {
+                atomic
+                {
+                    i2c_in_use=TRUE;
+                }
             }
         }
         else
@@ -263,6 +294,7 @@ implementation
     // send initial config
     void task get_data_from_chip_task()
     {
+
         bool i2c_in_use_temp;
 
         atomic
@@ -278,6 +310,13 @@ implementation
             if(check != SUCCESS)
             {
       	         post get_data_from_chip_task();
+            }
+            else
+            {
+                atomic
+                {
+                    i2c_in_use = TRUE;
+                }
             }
         }
         else
@@ -390,6 +429,14 @@ implementation
 
     }
 
+    void task request_ressource_task()
+    {
+        if(call I2C_Resource.request() != SUCCESS)
+        {
+            post request_ressource_task();
+        }
+    }
+
     void task init_task()
     {
         FMClick_init_state_t init_state_temp;
@@ -407,20 +454,25 @@ implementation
                 call Timer.startOneShot(1);
                 break;
         	case FM_CLICK_RST_HIGH:
-                init_state_temp= FM_CLICK_READ_REGISTERS;
-                post get_registers_task();
 
+                init_state_temp= FM_CLICK_READ_REGISTERS;
+
+                post request_ressource_task();
+                
+                
                 break;
             case FM_CLICK_READ_REGISTERS:
+
                 atomic
                 {
                     conf_registers.test1.XOSCEN = 1;
                 }
 
                 init_state_temp = FM_CLICK_SET_OSC;
-                post send_initial_conf_task();
+                
+                post request_ressource_task();
+                    
                 break;
-
             case FM_CLICK_SET_OSC:
                 init_state_temp = FM_CLICK_WAIT_OSC;
                 call Timer.startOneShot(500);
@@ -436,7 +488,7 @@ implementation
                     conf_registers.power_conf.DMUTE=1;
                 }
 
-                post write_conf_to_chip_task();
+                post request_ressource_task();
 
                 break;
             case FM_CLICK_WAIT_POWER_UP:
@@ -463,11 +515,11 @@ implementation
                     conf_registers.system_configuration_3.SKSNR = 0x4;
                     conf_registers.system_configuration_3.SKCNT = 0x8;
                 }
-                post write_conf_to_chip_task();
+
+                post request_ressource_task();
                 break;
 
             case FM_CLICK_SEND_DEFAULT_CONF:
-                signal FMClick.initDone(SUCCESS);
                 init_state_temp = FM_CLICK_READY;
                 break;
             case FM_CLICK_READY:
@@ -478,6 +530,11 @@ implementation
         {
             init_state = init_state_temp;
         }
+
+        if(init_state_temp == FM_CLICK_READY)
+        {
+            signal FMClick.initDone(SUCCESS);
+        }
     }
 
     void task seek_tune_timer_task()
@@ -487,7 +544,40 @@ implementation
 
     event void I2C_Resource.granted()
     {
-        call Timer.startOneShot(1);
+
+        FMClick_init_state_t init_state_temp;
+        FMClick_operation_t current_operation_temp;
+
+        atomic
+        {
+            init_state_temp = init_state;
+            current_operation_temp = current_operation;
+        }
+
+        if(init_state_temp == FM_CLICK_READ_REGISTERS)
+        {
+            post get_registers_task();
+        }
+        else if(init_state_temp == FM_CLICK_SET_OSC)
+        {
+            post send_initial_conf_task();
+        }
+        else if(init_state_temp == FM_CLICK_WAIT_POWER_UP ||
+                init_state_temp == FM_CLICK_SEND_DEFAULT_CONF ||
+                current_operation_temp == FM_CLICK_TUNE_START||
+                current_operation_temp == FM_CLICK_SEEK_START||
+                current_operation_temp == FM_CLICK_VOLUME||
+                current_operation_temp == FM_CLICK_RDS)
+        {
+            post write_conf_to_chip_task();
+        }
+        else if(current_operation_temp == FM_CLICK_WAIT_FOR_CLEAR ||
+                current_operation_temp == FM_CLICK_SEEK_WAIT ||
+                current_operation_temp == FM_CLICK_TUNE_WAIT ||
+                current_operation_temp == FM_CLICK_GET_RDS)
+        {
+            post get_data_from_chip_task();
+        }
     }
 
     async event void I2C.writeDone(error_t error, uint16_t addr, uint8_t length, uint8_t* data)
@@ -508,6 +598,30 @@ implementation
             || init_state_temp == FM_CLICK_SEND_DEFAULT_CONF)
         {
             post init_task();
+            call I2C_Resource.release();
+        }
+        else if(current_operation_temp == FM_CLICK_VOLUME || 
+                current_operation_temp == FM_CLICK_RDS)
+        {
+            // request data from chip if rds data are pending
+            if(rds_pending)
+            {
+                atomic
+                {
+                    current_operation = FM_CLICK_GET_RDS;
+                }
+                post get_data_from_chip_task();
+            }
+            else
+            {
+                atomic
+                {
+                    current_operation = FM_CLICK_IDLE;
+                }
+
+                call I2C_Resource.release();
+            }
+           
         }
         else if(current_operation_temp == FM_CLICK_WAIT_WRITE_FINISH)
         {
@@ -515,6 +629,38 @@ implementation
             {
                 current_operation = FM_CLICK_WAIT_FOR_CLEAR;
                 post get_data_from_chip_task();
+            }
+        }
+        else if(current_operation_temp == FM_CLICK_SEEK_START)
+        {
+            atomic
+            {
+                current_operation = FM_CLICK_SEEK_WAIT;
+            }
+
+            if(rds_pending)
+            {
+                post get_data_from_chip_task();
+            }
+            else
+            {
+                call I2C_Resource.release();
+            }
+        }
+        else if(current_operation_temp == FM_CLICK_TUNE_START)
+        {
+            atomic
+            {
+                current_operation = FM_CLICK_TUNE_WAIT;
+            }
+
+            if(rds_pending)
+            {
+                post get_data_from_chip_task();
+            }
+            else
+            {
+                call I2C_Resource.release();
             }
         }
     }
@@ -538,6 +684,7 @@ implementation
             memcpy(conf_registers.data_bytes, &(data[offset]), 12);
 
             post init_task();
+            call I2C_Resource.release();
         }
         else if(length==12)
         {
@@ -548,10 +695,19 @@ implementation
 
             if(data_registers.rssi.RDSR)
             {
+                rds_pending = FALSE;
                 post rds_task();
+            }   
+
+            if (current_operation_temp == FM_CLICK_GET_RDS)
+            {
+                call I2C_Resource.release();
+                atomic
+                {
+                    current_operation = FM_CLICK_IDLE;
+                }
             }
         }
-
     }
 
     // there is new data to retrieve
@@ -564,9 +720,24 @@ implementation
             current_operation_temp = current_operation;
         }
 
-        if(current_operation_temp != FM_CLICK_IDLE || conf_registers.system_configuration_1.RDS)
+        if(current_operation_temp == FM_CLICK_TUNE_WAIT || 
+           current_operation_temp == FM_CLICK_SEEK_WAIT )
         {
-            post get_data_from_chip_task();
+            post request_ressource_task();
+        }
+        else if(conf_registers.system_configuration_1.RDS)
+        {
+            rds_pending = TRUE;
+
+            if(current_operation_temp == FM_CLICK_IDLE)
+            {
+                atomic
+                {
+                    current_operation = FM_CLICK_GET_RDS;
+                }
+                
+                post request_ressource_task();
+            }
         }
     }
 
@@ -580,7 +751,7 @@ implementation
 
         if(operation == FM_CLICK_WAIT_FOR_CLEAR)
         {
-            post get_data_from_chip_task();
+            post request_ressource_task();
         }
         else
         {
@@ -593,10 +764,8 @@ implementation
         
         switch(operation)
             {
-                case FM_CLICK_IDLE: // nothing to do
-                case FM_CLICK_WAIT_WRITE_FINISH:
-                    break;
-                case FM_CLICK_SEEK:
+                
+                case FM_CLICK_SEEK_WAIT:
                     if(data_registers.rssi.STC)
                     {
                         uint16_t channel;
@@ -625,7 +794,7 @@ implementation
                     }
                     
                     break;
-                case FM_CLICK_TUNE:
+                case FM_CLICK_TUNE_WAIT:
                     
                     if(data_registers.rssi.STC)
                     {
@@ -647,9 +816,11 @@ implementation
                     }
                     break;
                 case FM_CLICK_WAIT_FOR_CLEAR:
+                    
                     if(data_registers.rssi.STC)
                     {
                         post seek_tune_timer_task();
+                        call I2C_Resource.release();
                     }
                     else
                     {
@@ -657,7 +828,10 @@ implementation
                         {
                             current_operation = FM_CLICK_IDLE;
                         }
+                        call I2C_Resource.release();
                     }
+                    break;
+                default:
                     break;
             }
     }
