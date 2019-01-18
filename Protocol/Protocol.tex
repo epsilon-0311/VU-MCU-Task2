@@ -27,6 +27,8 @@
 \usepackage{enumitem}
 \usepackage{fullpage}
 \usepackage{style}
+\usepackage{tikz}
+
 
 %***************************************************************************
 % note: the template is in English, but you can use German for your
@@ -38,12 +40,14 @@
 %***************************************************************************
 % enter your data into the following fields
 %***************************************************************************
-\newcommand{\Vorname}{IhrVorname/Your First Name}
-\newcommand{\Nachname}{IhrNachname/YourSurname}
-\newcommand{\MatrNr}{3333333}
-\newcommand{\Email}{e3333333@student.tuwien.ac.at}
+\newcommand{\Vorname}{Chirstoph}
+\newcommand{\Nachname}{Lehr}
+\newcommand{\MatrNr}{}
+\newcommand{\Email}{e1525189@student.tuwien.ac.at}
 \newcommand{\Part}{I}
 \newcommand{\Tutor}{NameIhresTutors/NameOfYourTutor}
+
+\newcommand{\pts}[2]{\textbf{[#1]} #2}
 %***************************************************************************
 
 
@@ -80,75 +84,276 @@ not contain all subsections your protocol should contain.
 %---------------------------------------------------------------------------
 \subsection{Connections,  External Pullups/Pulldowns}
 %---------------------------------------------------------------------------
-Example:
-\bConnections{What}{}
-PORTC & external Pulldown enabled on PC0,3-5,7 \\
-J12 & Connected to VCC \\
-\eConnections
-
-Write down all things we need to know to get your program running on our board.
-All non-standard external connections, all switches your program needs, \dots
-If we cannot figure out how we get your program running, we can not give you
-points for it.
+The Pin-Configuration is listed in table \ref{table:PinConfigurations}.
+\begin{table}[]
+	\begin{tabular}{|r|l|l|l|}\hline
+		MCU-Pin & Used Pin-Function & Extension Board	& Purpose \\ \hline
+		PF0 	& ADC0				& 					& Potentiometer \\ \hline 
+		\multicolumn{4}{|c|}{FMClick} \\ \hline 
+		PD0		& SCL				& SCIO 				& I2C Clock \\
+		PD1 	& SDA				& SDIO				& I2C Data \\
+		PD3 	&					& GPIO2				& GPIO2 for interrupts \\
+		PD4 	&					& RST				& Reset pin\\\hline
+		\multicolumn{4}{|c|}{Ethernet Module} \\ \hline 
+		PB0 	&					& CS				& Chip select\\
+		PB1 	& SCL				& SCK 				& SPI Clock\\
+		PB2 	& MOSI				& MOSI				& Master out, Slave in\\
+		PB3 	& MISO				& MISO 				& Master in, Slave out\\
+		PB4 	&					& MP3\_RST			& Reset \\
+		PD2 	& INT2				& INT 				& Interrupt Pin\\ \hline
+		\multicolumn{4}{|c|}{PS2 } \\ \hline 		
+		PK6 	& 					& Data 				& PS2 Data\\
+		PK7 	& 	 				& Clock				& PS2 Clock\\\hline
+	\end{tabular}
+	\caption{Pin Configuration}
+	\label{table:PinConfigurations}
+\end{table}
 
 
 %---------------------------------------------------------------------------
 \subsection{Design Decisions}
 %---------------------------------------------------------------------------
 
-Here comes the design decisions that you made during programming.
+\begin{itemize}
+	\item For a smoother and better handling of the volume, I implemented median calculation of the ADC values. Unfortunately I realised later, that the FMClick only uses 4 bit Volume scale instead of expected 8 bit. I decided to leave it in the code.
+	\item In favour of an easier handling I chose that every time a configuration Bit was 
+	changed, the first 5 registers will be transmitted. In addition I read always the first 6 register. The only 2 exceptions are during startup, where all 16 registers a read an one time 6 registers is written to.
+\end{itemize}
 
 %---------------------------------------------------------------------------
 \subsection{Specialities}
 %---------------------------------------------------------------------------
 
-Does you solution have something special (positive or negative)?
-
+\begin{itemize}
+	\item Most registers from the FMClick module are modelled as Unions of Bitfields. This has the advantage of easier modifications of the configuration Bits.
+\end{itemize}
 
 %***************************************************************************
 \section{Main Application}
 %***************************************************************************
 
-Describe your application.
+The main application handles the interaction between the Database, FMClick, PS2 and the ADC. A Database is used to store information externally. The FMClick is used for listening to radio and retrieving information from the Radio Data Service. A PS2 Keyboard is used to
+send commands to the Application. The ADC is used to set the volume of the FMClick module.
+
+%---------------------------------------------------------------------------
+\subsection{Main Screen}
+%---------------------------------------------------------------------------
+
+The main Main Screen displays the following items:
+\begin{itemize}
+	\item The position in the favourite list
+	\item The current Date and Time, if available
+	\item Frequency of the current station
+	\item The name of the current station
+	\item The radio text, if available
+	\item A note, if available
+\end{itemize}
 
 
+
+%---------------------------------------------------------------------------
+\subsection{Commands}
+%---------------------------------------------------------------------------
+
+By using a PS2-Keyboard the following commands can be executed:
+\begin{itemize}
+	\item n/p Switch to next/previous station
+		\subitem This is done by starting a seek operation either upwards or downwards
+	\item +/- Manual tune
+		\subitem Step to the next/previous channel
+	\item t   Tune to a specific channel 
+		\subitem Done by entering a frequency
+	\item l   Toggle displaying of the channel list
+	\item s   Start a scan for channels
+		\subitem This starts a scan over the whole spectrum 
+	\item f   Add channel to favourites followed by a number between 0 and 9
+		\subitem 1-9 add channel on position
+		\subitem 0 to add current channel to list
+	\item a   Add a note to the current station
+		\subitem Allows the user to add a up to 40 character long note
+\end{itemize}
+
+%---------------------------------------------------------------------------
+\subsection{Scanning}
+%---------------------------------------------------------------------------
+
+When a scan is initiated the local and the remote list is cleared and filled
+up with new entries found by the scan. 
+
 %***************************************************************************
-\section{Communication}
+\section{Database}
 %***************************************************************************
+
+The Database module handles the UDP with the host of Database.
+The following items are stored in the on the host:
+\begin{itemize}
+	\item The Frequency of the station
+	\item The name of the station
+	\item The position in the Favourite List 
+	\item The node of the station, if available
+\end{itemize}
+
+At the startup of the Application it fetches the current state from the Database. 
+During runtime changed data is saved to the Database. If the station is changed and 
+the new station is in the list, all stored data is retrieved from the Database.
 
 %---------------------------------------------------------------------------
 \subsection{UDP}
 %---------------------------------------------------------------------------
 
-Explain your modules.
+
+%---------------------------------------------------------------------------
+\subsection{Database Module}
+%---------------------------------------------------------------------------
+
+The Database module handles storing of data and retrieving information from the
+host of the Database. The decode the data from the host, strings are tokenized and 
+parsed. It supports adding and updating of stations as well as dropping all stored 
+data. To get all necessary data, retrieving of a single item and the complete list 
+is available.
 
 %***************************************************************************
 \section{FMCLick}
 %***************************************************************************
 
+The FMClick module is a small FM-module which is connected via I2C to the 
+BigAVR6 development board. The module supports configurations for multiple 
+countries and is able to decode RDS information.
+
 %---------------------------------------------------------------------------
-\subsection{PS/2}
+\subsection{I2C}
 %---------------------------------------------------------------------------
 
+For communication with the FMClick moduel the I2C bus is used. In TinyOS the
+bus is modelled as a Resource. For a clean handling before each transmission the 
+the Resource will be acquired and after the transmission is finished, it is released 
+again.
+\newline
+When the FMClick module is initialized all registers are read at the beginning. 
+Afterwards the oscillator is activated and the initial configuration is transmitted.
+When the startup procedure is finished, every write sends the first 5 registers and 
+every read reads the last 6 registers. 
+
+%...........................................................................
+\subsubsection{Register Manipulation}
+%...........................................................................
+For an easier modification of the registers of the chip I decided to model the
+16 bit registers as bitfields. It is necessary maintain the correct order of 
+the single bits. Since the high byte is transfered first, the top most entries 
+have to be bits from the high byte. The first entry starts at the least significant 
+bit, so the lowest bit in the high byte has to be in the first entry of the 
+bitfield. As an example see Listing \ref{lst:register} which represents the register
+SYSCONF1.
+
+\begin{lstlisting}[language=C,label={lst:register}]
+typedef union __sys_conf_1_t
+{
+	struct
+	{
+		const uint8_t Reserved_2    : 2; // Bits 8:9
+		uint8_t AGCD                : 1; // Bit 10
+		uint8_t DE                  : 1; // Bit 11
+		uint8_t RDS                 : 1; // Bit 12
+		const uint8_t Reserved_1    : 1; // Bit 13
+		uint8_t STCIEN              : 1; // Bit 14
+		uint8_t RDSIEN              : 1; // Bit 15
+		uint8_t GPIO1               : 2; // Bits 0:1
+		uint8_t GPIO2               : 2; // Bits 2:3
+		uint8_t GPIO3               : 2; // Bits 4:5
+		uint8_t BLNDADJ             : 2; // Bits 6:7
+	};
+	uint8_t data_bytes[2];
+} sys_conf_1_t;
+\end{lstlisting}
+
+%...........................................................................
+\subsubsection{Seek and Tune}
+%...........................................................................
+If either a seek or a tune operation is started, the application waits for 
+the trigger of an external interrupt on pin PD3. When the interrupt is fired
+the data registers from the FMClick module are read, if the seeking/tuning is 
+completed, the respective bits are cleared and a new operation is only permitted
+if the STC bit from the FMClick is cleared. This bit is polled in a 40ms period 
+until it is cleared.
+
+%---------------------------------------------------------------------------
+\subsection{Radio Data Service}
+%---------------------------------------------------------------------------
+
+I implemented the following RDS Datatypes:
+\begin{itemize}
+	\item Radio Station 
+		\subitem RDS Type 1 A and B
+	\item Radio Text
+		\subitem RDS Type 2 A and B
+	\item Date and Time
+		\subitem RDS Type 4 A
+\end{itemize}
+
+%...........................................................................
+\subsubsection{Radio Station}
+%...........................................................................
+The name of the Station is transmitted in 4 Blocks where each Block holds 2 
+characters. So after receiving of 4 Radio Station message, the Application 
+should be able to construct the name of the current station. The differences
+between Type A and B are not considered in the application.
+
+%...........................................................................
+\subsubsection{Radio Text}
+%...........................................................................
+The Radio Text is transmitted in up to 16 Blocks, with up to 64 characters.
+If Type A is used, each message holds 4 characters, but Type B only uses 32 
+symbols. In order to check if the retrieved message is correct, all ids have
+to be received in a ascending order without gaps. If the text is shorter than
+the full span, a carriage return ASCII character is sent to indicate the end 
+of the string.
+
+%...........................................................................
+\subsubsection{Date and Time}
+%...........................................................................
+This type communicates the current time and date of the channel. The date is 
+transmitted "Modified Julian Date" format. The algorithm used in the Application
+can be checked by using the mjd\_test.py file. This file uses the same algorithm
+but implemented in Python. 
+\newline
+The time is two 6 bit unsigned integers and a offset from UTC in half hours.
 
 %***************************************************************************
-\section{...explain your application modules ...}
+\section{PS2}
 %***************************************************************************
 
+To receive the data sent from the PS2-Keyboard a Pin-Change-Interrupt on the 
+clock pin is used. Everytime the clock has a falling edge the value of the 
+data-line is sampled. After a complete data-frame, (11 Bits: 1 Startbit, 
+8 Databits, 1 Paritybit, 1 Stopbit) the char from the received scan-code  
+decrypted. To get the actual character a 2-dimensional is compared to the 
+received scan-code. 
+
+%---------------------------------------------------------------------------
+\subsection{Timeout Handling}
+%---------------------------------------------------------------------------
+
+In case one Bit is drop during transmission a 1ms Second timer is used. The 
+Timer is started when a new transmission starts, and stopped if all 11 Bytes 
+are retrieved. If one Bit is dropped or the transmission takes to long, the 
+timer resets the state machine.
+
 %***************************************************************************
-\section{...the above were only examples}
+\section{Volume ADC}
 %***************************************************************************
+
+For the volume the Application uses the ADC0 connected to Port F0.Every 100 ms 
+a new value from ADC0 is sampled. After 5 samples the median is calculated. If 
+the median changed from the last sampling, the Volume is updated.
 
 
 %***************************************************************************
 \section{Problems}
 %***************************************************************************
-
-Put all problems you encountered into this section.
-This is important information, which allows us to determine where there are
-problems.
-(Don't worry, we don't take points.)
-
+¸
+I started setting the channel of for the FMClick module by using the actual channel numbers.
+After implementing the Database, problems showed, because now, I had to do every time a 
+transformation.
 
 %***************************************************************************
 \section{Work}
@@ -159,13 +364,13 @@ Estimate the work you put into solving the Application.
 \begin{tabular}{|l|c|c|}\hline
 	Task & Time spent \\ \hline
 
-	reading manuals, datasheets &  5 h\\
+	reading manuals, datasheets & 10 h\\
 	program design              &  5 h\\
-	programming                 & 10 h\\
-	debugging                   & 45 h\\
+	programming                 & 50 h\\
+	debugging                   & 15 h\\
 	questions, protocol         &  5 h\\ \hline
 
-	\textbf{Total}              & 75 h\\ \hline
+	\textbf{Total}              & 85 h\\ \hline
 \end{tabular}
 
 
@@ -173,12 +378,7 @@ Estimate the work you put into solving the Application.
 %***************************************************************************
 \section{Theory Tasks}
 %***************************************************************************
-Copy the theory task specification from the app 2 specification!
-
-% Your answers should be brief but complete
-
-
-
+\input{theorie2}
 
 %***************************************************************************
 \newpage
