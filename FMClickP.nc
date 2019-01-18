@@ -792,6 +792,10 @@ implementation
                             signal FMClick.tuneComplete(channel);
                         }                        
                     }
+                    else
+                    {
+                        post get_data_from_chip_task();
+                    }
                     
                     break;
                 case FM_CLICK_TUNE_WAIT:
@@ -813,6 +817,10 @@ implementation
                         channel |= conf_registers.channel.CHANNEL_L;
 
                         signal FMClick.tuneComplete(channel);
+                    }
+                    else
+                    {
+                        post get_data_from_chip_task();
                     }
                     break;
                 case FM_CLICK_WAIT_FOR_CLEAR:

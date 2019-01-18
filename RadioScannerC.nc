@@ -139,7 +139,6 @@ implementation {
     task void check_volume_task();
     task void extend_scan_list_task();
     task void check_in_database_task();
-    task void update_station_database();
     task void date_time_task();
 
     task void seek_up_task();
@@ -391,8 +390,9 @@ implementation {
                 scan_index=0;
                 current_display_state = SCANNING;
             }
-
+            memset(favorite_list,0,FAVORITE_LIST_LENGTH);
             memset(scan_list,0,SCAN_LIST_SIZE);
+
             call Glcd.fill(0x00);
             call Glcd.drawTextPgm(scanning_channels, 0, SCANNING_TEXT_LINE);
             call Database.purgeChannelList();
@@ -689,30 +689,25 @@ implementation {
         {
             if(scan_list[i] == channel)
             {
-                found = TRUE;
+                ch_pointer = &ch_info;
+                ch_info.name = temp;
+                ch_info.notes = note_temp;
+                ch_info.quickDial = 0xFF;
+
+                atomic
+                {
+                    (void)strcpy(ch_info.name, rds_info.radio_station);
+                }
+
+                ch_info.frequency = channel+BAND_BOTTOM_100kHz;
+
+                strcpy(ch_info.notes, note);
+
+                call Database.saveChannel(i, ch_pointer);
                 break;
             }
         }
-
-        if(!found)
-        {
-            i = 0xFF;
-        }
-
-        ch_pointer = &ch_info;
-        ch_info.name = temp;
-        ch_info.notes = note_temp;
-        ch_info.quickDial = 0xFF;
-        atomic
-        {
-            (void)strcpy(ch_info.name, rds_info.radio_station);
-        }
-
-        ch_info.frequency = channel+BAND_BOTTOM_100kHz;
-
-        strcpy(ch_info.notes, note);
-
-        call Database.saveChannel(i, ch_pointer);
+        
     }
 
     task void input_note_task()
@@ -1205,7 +1200,8 @@ implementation {
 
             if(fav_pos > 0)
             {
-                if(favorite_list[fav_pos] == 0)
+                if(favorite_list[fav_pos] != 0 &&
+                   favorite_list[fav_pos] != channel )
                 {
                     for(i=0; i< SCAN_LIST_SIZE;i++)
                     {
