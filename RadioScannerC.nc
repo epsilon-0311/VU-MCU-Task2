@@ -126,7 +126,21 @@ implementation {
     task void input_note_task();
     task void input_frquency_task();
     task void update_station_database();
+    task void update_radio_time_task ();
+    task void update_channel_task();
+    task void update_radio_station_task ();
+    task void update_radio_text_task ();
+    task void update_note_task ();
     task void update_favourite_task();
+    task void received_char_task();
+    task void enable_RDS_task();
+    task void set_volume_task();
+    task void check_volume_task();
+    task void extend_scan_list_task();
+    task void check_in_database_task();
+    task void update_station_database();
+    task void date_time_task();
+
 
     void update_displays(void);
     bool handle_display_states(char current_char);
@@ -163,7 +177,7 @@ implementation {
         update_displays();
     }
 
-    void task update_radio_time_task ()
+    task void update_radio_time_task ()
     {
         uint8_t length = strlen_P(date_time_format);
         char format[length+1];
@@ -205,7 +219,7 @@ implementation {
 
     }
 
-    void task update_channel_task()
+    task void update_channel_task()
     {
         char display_string[20];
         char display_string_2[20];
@@ -230,7 +244,7 @@ implementation {
 
     }
 
-    void task update_radio_station_task ()
+    task void update_radio_station_task ()
     {
         char station_string[8+1];
 
@@ -244,7 +258,7 @@ implementation {
         
     }
 
-    void task update_radio_text_task ()
+    task void update_radio_text_task ()
     {
         char radio_text[CHARS_IN_LINE+1];
         atomic
@@ -265,7 +279,7 @@ implementation {
         call Glcd.drawText(radio_text,0,RADIO_TEXT_LINE);
     }
 
-    void task update_note_task ()
+    task void update_note_task ()
     {
         char note_output[CHARS_IN_LINE+1];
         atomic
@@ -287,7 +301,7 @@ implementation {
         call Glcd.drawText(note_output,0,RADIO_NOTE_LINE);
     }
 
-    void task received_char_task()
+    task void received_char_task()
     {
         char current_char;
         atomic
@@ -385,7 +399,7 @@ implementation {
         }
     }
 
-    void task enable_RDS_task()
+    task void enable_RDS_task()
     {
         if((call FMClick.receiveRDS(TRUE) )!= SUCCESS)
         {
@@ -393,7 +407,7 @@ implementation {
         }
     }
 
-    void task set_volume_task()
+    task void set_volume_task()
     {
 
         if(call FMClick.setVolume(current_volume) != SUCCESS)
@@ -412,7 +426,7 @@ implementation {
         }
     }
 
-    void task check_volume_task()
+    task void check_volume_task()
     {
         uint8_t new_volume;
 
@@ -449,7 +463,7 @@ implementation {
         }
     }
 
-    void task display_list_task()
+    task void display_list_task()
     {
         uint8_t i;
         uint8_t offset;
@@ -580,7 +594,7 @@ implementation {
         }
     }
 
-    void task check_in_database_task()
+    task void check_in_database_task()
     {
         uint8_t i;
         uint16_t channel;
@@ -600,7 +614,7 @@ implementation {
         }
     }
 
-    void task update_station_database()
+    task void update_station_database()
     {
         uint16_t channel;
         uint8_t i;
