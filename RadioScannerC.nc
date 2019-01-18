@@ -239,14 +239,9 @@ implementation {
             (void)strcpy(station_string, rds_info.radio_station);
         }
 
-        if(station_string[0]=='\0')
-        {
-            call Glcd.drawTextPgm(empty_half_line,64,RADIO_STATION_LINE);
-        }
-        else
-        {
-            call Glcd.drawText(station_string,64,RADIO_STATION_LINE);
-        }
+        call Glcd.drawTextPgm(empty_half_line,64,RADIO_STATION_LINE);
+        call Glcd.drawText(station_string,64,RADIO_STATION_LINE);
+        
     }
 
     void task update_radio_text_task ()
