@@ -109,10 +109,10 @@ implementation {
     char const PROGMEM empty_line[] = "                   ";
     char const PROGMEM empty_half_line[] = "          ";
     char const PROGMEM h_for_help[] = "h to toggle help";
-    char const PROGMEM help_string[] =  "n/p switch channel\n+/- step\nt   tune to channel\nl   toggle list\ns   scan\nf   add favorite\na   add note";
+    char const PROGMEM help_string[] =  "n/p seek channel\n+/- step channel\nt   tune to channel\nl   toggle list\ns   scan\nf   add favorite\na   add note";
     char const PROGMEM volume_text[] = "Volume:%2u";
-    char const PROGMEM list_entry_format[] = "%1u:%3u.%1u  | %1u:%3u.%1u \n";
-    char const PROGMEM list_half_entry_format[] = "%1u:%3u.%1u\n";
+    char const PROGMEM list_entry_format[] = "%1u:%3u.%1u %1u| %1u:%3u.%1u %1u\n";
+    char const PROGMEM list_half_entry_format[] = "%1u:%3u.%1u %1u\n";
     char const PROGMEM list_change_page[] = "+/- to change page\n[0-9] tune channel";
     char const PROGMEM add_note_text[] = "Add Note";
     char const PROGMEM input_frequency_text[] = "Input Frequency\nExample: 88.6 105.3";
@@ -126,6 +126,7 @@ implementation {
     task void input_note_task();
     task void input_frquency_task();
     task void update_station_database();
+    task void update_favourite_task();
 
     void update_displays(void);
     bool handle_display_states(char current_char);
@@ -136,6 +137,7 @@ implementation {
     void handle_help(void);
     void handle_new_note(void);
     void handle_new_frequency(void);
+    uint8_t get_favorite_index(uint16_t channel);
 
     event void Boot.booted(){
         call PS2.init();
@@ -174,6 +176,33 @@ implementation {
         }
 
         call Glcd.drawText(date_string,0,RADIO_TIME_LINE);
+    }
+
+    task void update_favourite_task()
+    {
+        uint16_t channel=0;
+        uint8_t i;
+        char favorite_text[2];
+
+        atomic
+        {
+            channel = current_channel;
+        }
+
+        i = get_favorite_index(channel);
+
+        if(i>0)
+        {
+            favorite_text[0] = '0'+i;
+        }
+        else
+        {
+            favorite_text[0] = ' ';
+        }
+        favorite_text[1] = '\0';
+
+        call Glcd.drawText(favorite_text, 110,RADIO_TIME_LINE);
+
     }
 
     void task update_channel_task()
@@ -463,11 +492,15 @@ implementation {
             uint16_t channel = scan_list[i+offset];
             uint16_t kHz_1,kHz_2;
             uint8_t MHz_1, MHz_2;
+            uint8_t fav_index_1, fav_index_2;
+            
 
             if(channel==0)
             {
                 break;
             }
+
+            fav_index_1 = get_favorite_index(channel);
 
             radio_frequency += channel;
             kHz_1 = radio_frequency%10;
@@ -480,7 +513,7 @@ implementation {
                 char half_entry_format[17];
 
                 (void) strcpy_P(half_entry_format, list_half_entry_format);
-                sprintf(display_string, half_entry_format, i, MHz_1, kHz_1);
+                sprintf(display_string, half_entry_format, i, MHz_1, kHz_1, fav_index_1);
                 strcat(list_output, display_string);
                 break;
             }
@@ -491,7 +524,9 @@ implementation {
                 kHz_2 = radio_frequency%10;
                 MHz_2 = radio_frequency/10;
 
-                sprintf(display_string, entry_format, i, MHz_1, kHz_1, i+1, MHz_2, kHz_2);
+                fav_index_2 = get_favorite_index(channel);
+
+                sprintf(display_string, entry_format, i, MHz_1, kHz_1, fav_index_1, i+1, MHz_2, kHz_2, fav_index_2);
                 strcat(list_output, display_string);
             }
         }
@@ -500,7 +535,7 @@ implementation {
         call Glcd.drawTextPgm(list_change_page,0,50);
     }
 
-    void task extend_scan_list_task()
+    task void extend_scan_list_task()
     {
         uint16_t channel;
         bool scan_running_temp;
@@ -932,6 +967,7 @@ implementation {
         post update_radio_text_task();
         post update_radio_time_task();
         post update_note_task();
+        post update_favourite_task();
 
         call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
     }
@@ -1111,6 +1147,8 @@ implementation {
             {
                 current_display_state = DISPLAY_FREE;
             }
+
+            post update_favourite_task();
         }
     }
 
@@ -1314,5 +1352,26 @@ implementation {
         call Glcd.drawTextPgm(press_enter_text,0,INPUT_FREQUENCY_PRESS_ENTER_LINE);
 
         post input_frquency_task();
+    }
+
+    uint8_t get_favorite_index(uint16_t channel)
+    {
+        bool found=FALSE;
+        uint8_t i;
+        for(i=1; i<=FAVORITE_LIST_LENGTH; i++)
+        {
+            if(favorite_list[i] == channel)
+            {
+                found = TRUE;
+                break;
+            }
+        }
+
+        if(!found)
+        {
+            i =0;
+        }
+
+        return i;
     }
 }
