@@ -674,7 +674,6 @@ implementation {
     {
         uint16_t channel;
         uint8_t i;
-        bool found = FALSE;
 
         channelInfo ch_info, *ch_pointer;
         char temp[RADIO_STATION_LENGTH+1];
