@@ -120,6 +120,7 @@ bool db_parse_line(char *line, channel_info_t *channel, bool fail) {
         } else if (strcmp("note", k) == 0) {
             // we specified that the note field MUST come last, so just read it
             // in and return then...
+            VVPRINT("got note: '%s'\n", v);
             return channel_set_note(channel, v);
         }
 
@@ -281,6 +282,7 @@ void release_resources_signal(int signal) {
 // only valid inside the main's control loop!
 #define RESPOND(...) \
     sprintf(buffer, __VA_ARGS__); \
+    VVPRINT(__VA_ARGS__); \
     sendto(sock, buffer, strlen(buffer), 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
 
 int main(int argc, char **argv) {
