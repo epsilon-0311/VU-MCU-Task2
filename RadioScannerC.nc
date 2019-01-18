@@ -885,9 +885,11 @@ implementation {
 
     event void DateTime_Timer.fired()
     {
-        
+        DisplayState_t display_state;
+
         atomic
         {
+            display_state = current_display_state;
             if(++rds_info.current_minute >= 60)
             {
                 rds_info.current_minute = 0;
@@ -896,10 +898,12 @@ implementation {
                     rds_info.current_hour =0;
                 }
             }
-
-            post update_radio_time_task();
         }
-
+        
+        if(display_state == DISPLAY_FREE)
+        {
+            post update_radio_text_task();
+        }
     }
 
 
