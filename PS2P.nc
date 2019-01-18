@@ -13,6 +13,7 @@ module PS2P{
     uses interface GeneralIO as Clock;
     uses interface GeneralIO as Data;
     uses interface HplAtmegaPinChange;
+    uses interface Timer<TMilli> as Timeout_Timer;
     provides interface PS2;
 }
 
@@ -107,6 +108,18 @@ implementation{
                   }
             }
         }
+        // releasing flow control
+        call Clock.set();
+    }
+
+    task void start_timer_task()
+    {
+        call Timeout_Timer.startOneShot(5);
+    }
+
+    task void stop_timer_task()
+    {
+        call Timeout_Timer.stop();
     }
 
     async event void HplAtmegaPinChange.fired(){
@@ -120,8 +133,25 @@ implementation{
             counter = (counter+1)%11;
 
             if(counter ==0){
+                // activating flow control
+                call Clock.clr();
                 post decrypt_char_task();
+                post stop_timer_task();
             }
+            else if(counter == 1)
+            {
+                post start_timer_task();
+            }
+        }
+    }
+
+    event void Timeout_Timer.fired()
+    {
+        // transmission timed out
+        atomic
+        {
+            counter = 0;
+            status = 0;
         }
     }
 }
