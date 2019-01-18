@@ -82,6 +82,7 @@ implementation {
 
     uint8_t current_radio_text_index;
     uint16_t current_channel;
+    uint16_t tune_to_channel;
     uint8_t volume_sample_array[VOLUME_SAMPLE_ARRAY_SIZE];
     uint8_t volume_sample_index;
     uint8_t current_volume;
@@ -141,6 +142,9 @@ implementation {
     task void update_station_database();
     task void date_time_task();
 
+    task void seek_up_task();
+    task void seek_down_task();
+    task void tune_to_task();
 
     void update_displays(void);
     bool handle_display_states(char current_char);
@@ -175,6 +179,7 @@ implementation {
         }
 
         update_displays();
+        call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
     }
 
     task void update_radio_time_task ()
@@ -319,11 +324,17 @@ implementation {
         }
         else if(current_char == 'n')
         {
-            call FMClick.seek(TRUE);
+            if(call FMClick.seek(TRUE) != SUCCESS)
+            {
+                post seek_up_task();
+            }
         }
         else if(current_char == 'p')
         {
-            call FMClick.seek(FALSE);
+            if(call FMClick.seek(FALSE) != SUCCESS)
+            {
+                post seek_down_task();
+            }
         }
         else if(current_char == '+')
         {
@@ -339,7 +350,11 @@ implementation {
                 channel = 0;
             }
 
-            call FMClick.tune(channel);
+            if(call FMClick.tune(channel) != SUCCESS)
+            {
+                tune_to_channel = channel;
+                post tune_to_task();
+            }
         }
         else if(current_char == '-')
         {
@@ -355,11 +370,21 @@ implementation {
                 channel = MAX_CHANNEL;
             }
 
-            call FMClick.tune(channel);
+            if(call FMClick.tune(channel) != SUCCESS)
+            {
+                tune_to_channel = channel;
+                post tune_to_task();
+            }
         }
         else if(current_char == 's' || current_char == 'S')
         {
-            call FMClick.tune(0);
+
+            if(call FMClick.tune(0) != SUCCESS)
+            {
+                tune_to_channel = 0;
+                post tune_to_task();
+            }
+
             atomic
             {
                 scan_running = TRUE;
@@ -387,7 +412,13 @@ implementation {
         {
             // tune to favorite station
             uint8_t fav_pos = ((uint8_t)current_char -'0');
-            call FMClick.tune(favorite_list[fav_pos]);
+            uint16_t channel = favorite_list[fav_pos];
+
+            if(call FMClick.tune(channel) != SUCCESS)
+            {
+                tune_to_channel = channel;
+                post tune_to_task();
+            }
         }
         else if(current_char == 'a' || current_char == 'A')
         {
@@ -396,6 +427,30 @@ implementation {
         else if(current_char == 't' || current_char == 'T')
         {
             handle_new_frequency();
+        }
+    }
+
+    task void seek_up_task()
+    {
+        if(call FMClick.seek(TRUE) != SUCCESS)
+        {
+            post seek_up_task();
+        }
+    }
+
+    task void seek_down_task()
+    {
+        if(call FMClick.seek(FALSE) != SUCCESS)
+        {
+            post seek_down_task();
+        }
+    }
+
+    task void tune_to_task()
+    {
+        if(call FMClick.tune(tune_to_channel) != SUCCESS)
+        {
+            post tune_to_task();
         }
     }
 
@@ -568,9 +623,10 @@ implementation {
         {
             if(call FMClick.seek(TRUE) != SUCCESS)
             {
-                post extend_scan_list_task();
+                post seek_up_task();
             }
-            else if(channel != 0 )
+
+            if(channel != 0 )
             {
                 if(scan_index == 0 ||
                     (scan_index > 0 && channel != scan_list[scan_index-1]))
@@ -742,14 +798,18 @@ implementation {
     event void FMClick.initDone(error_t res)
     {
         post enable_RDS_task();
-        call FMClick.seek(TRUE);
+
+        if(call FMClick.seek(TRUE) != SUCCESS)
+        {
+            post seek_up_task();
+        }
     }
 
     async event void FMClick.tuneComplete(uint16_t channel)
     {
         uint8_t index;
         uint16_t old_channel;
-
+        
         atomic
         {
             old_channel = current_channel;
@@ -981,8 +1041,6 @@ implementation {
         post update_radio_time_task();
         post update_note_task();
         post update_favourite_task();
-
-        call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
     }
 
     bool handle_display_states(char current_char)
@@ -1075,10 +1133,16 @@ implementation {
                 current_display_state = DISPLAY_FREE;
             }
 
-            call FMClick.tune(channel);
+            if(call FMClick.tune(channel) != SUCCESS)
+            {
+                tune_to_channel = channel;
+                post tune_to_task();
+            }
+
             call Glcd.fill(0x00);
             
             update_displays();
+            call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
         }
         else if(current_char == 'l')
         {
@@ -1089,6 +1153,7 @@ implementation {
 
             call Glcd.fill(0x00);
             update_displays();
+            call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
         }
     }
 
@@ -1177,7 +1242,7 @@ implementation {
             call Glcd.fill(0x00);
 
             update_displays();
-
+            call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
             post update_station_database();
 
         }
@@ -1273,7 +1338,11 @@ implementation {
                 }
 
                 channel -= BAND_BOTTOM_100kHz;
-                call FMClick.tune(channel);
+                if(call FMClick.tune(channel) != SUCCESS)
+                {
+                    tune_to_channel = channel;
+                    post tune_to_task();
+                }
             }
             
             atomic
@@ -1283,6 +1352,7 @@ implementation {
 
             call Glcd.fill(0x00);
             update_displays();
+            call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
             
         }
         else if((current_char >= '0' && current_char <='9') || current_char == '.') // 127 == delete char
@@ -1336,6 +1406,7 @@ implementation {
 
             current_radio_text_index = 0;
             update_displays();
+            call Glcd.drawTextPgm(h_for_help,0,HELP_TEXT_LINE);
         }
     }
 
