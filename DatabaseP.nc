@@ -30,6 +30,7 @@ implementation {
     void enqueuePgmMsg(const char *text);
     void decode_ids(const char *text);
     void decode_radio_info(char *text);
+    void decode_radio_store(char *text);
 
     void task send_task();
     void task retrieve_list_data_task();
@@ -50,8 +51,9 @@ implementation {
     const char PROGMEM radio_info_key_note[] = "note=";
     const char PROGMEM radio_info_key_frequency[] = "freq=";
     const char PROGMEM radio_info_key_qdial[] = "qdial=";
-
-
+    const char PROGMEM return_key_cmd[] = "cmd=";
+    const char PROGMEM return_key_msg[] = "msg=";
+    
 	bool sendBusy = FALSE;
 
     uint8_t db_index;
@@ -106,8 +108,10 @@ implementation {
             switch(current_op)
             {
                 case DATABASE_ADD:
+                    decode_radio_store(return_data);
                     break;
                 case DATABASE_UPDATE:
+                    decode_radio_store(return_data);
                     break;
                 case DATABASE_DELETE:
                     break;
@@ -132,10 +136,10 @@ implementation {
             switch(current_op)
             {
                 case DATABASE_ADD:
-                    signal Database.savedChannel(0,0);
+                    decode_radio_store(return_data);
                     break;
                 case DATABASE_UPDATE:
-                    signal Database.savedChannel(0,0);
+                    decode_radio_store(return_data);
                     break;
                 case DATABASE_DELETE:
                     break;
@@ -479,5 +483,69 @@ implementation {
         }
 
         signal Database.receivedChannelEntry(id, ch_info);
+    }
+
+    void decode_radio_store(char *text)
+    {
+        uint8_t id = 0xFF, error =0;
+        char *token;
+
+        if(strncmp_P(text, error_string, 4) == 0)
+        {
+            error = 1;
+        }
+        else if(strncmp_P(text, ok_string, 3) == 0)
+        {
+            error = 0;
+        }
+        else
+        {
+            return;
+        }
+
+        token = strtok(text, "\r");
+        token = strtok(NULL, "\r");
+        token = strtok(token, ",");
+
+        while(token!= NULL)
+        {
+            if(0 == strncmp_P(token, radio_info_key_id, strlen_P(radio_info_key_id)))
+            {
+                uint8_t current_int=0;
+                uint8_t i;
+                // call debug_out_3.toggle(0x20);   
+                for(i = strlen_P(radio_info_key_id); i < strlen(token); i++)
+                {
+                    if(token[i] >= '0' && token[i] <= '9')
+                    {
+                        current_int *= 10;
+                        current_int += (uint8_t)(token[i]-'0');
+                    }
+                }
+                id = current_int;
+                if(error ==0)
+                {
+                    break;
+                }
+            }
+            else if(0 == strncmp_P(token, return_key_msg, strlen_P(return_key_msg)))
+            {
+                // output error message
+                if(error > 0)
+                {
+                    char message[19];
+                    strncpy(message, &(token[strlen_P(return_key_msg)]), 16);
+                    message[15] = '\0';
+
+                    call BufferedLcd.goTo(1,0);
+                    call BufferedLcd.write(message);
+                    call BufferedLcd.forceRefresh();
+                }
+            }
+
+            token = strtok(NULL, ",");
+        }        
+        
+        signal Database.savedChannel(id, error);
     }
 }
