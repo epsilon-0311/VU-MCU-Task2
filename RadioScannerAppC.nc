@@ -16,8 +16,6 @@ implementation {
     components new TimerMilliC() as Volume_Timer;
     components new TimerMilliC() as DateTime_Timer;
 
-    components new HplAtm1280GeneralIOFastPortP((uint16_t)&PORTJ, (uint16_t)&DDRJ, (uint16_t)&PINJ) as Port2;
-
     RS.PS2 -> PS2C;
     RS.Boot -> MainC.Boot;
     RS.BufferedLcd -> BufferedLcdC;
@@ -33,5 +31,4 @@ implementation {
 
     RS.Database -> DatabaseC;
 
-    RS.debug_out_2 -> Port2;
 }

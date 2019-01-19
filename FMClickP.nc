@@ -12,9 +12,6 @@ module FMClickP{
     uses interface Timer<TMilli> as Timer;
 
     uses interface GeneralIOPort as rds_debug;
-    uses interface GeneralIOPort as debug_out_2;
-    uses interface GeneralIOPort as debug_out_3;
-    uses interface BufferedLcd;
 
     provides interface FMClick;
     provides interface Init;
@@ -28,6 +25,7 @@ implementation
     void task send_initial_conf_task();
     void task rds_task();
     void task request_ressource_task();
+    void task reset_rds_task();
 
     void handle_last_operation(FMClick_operation_t operation);
     void decode_radio_text(void);
@@ -57,8 +55,6 @@ implementation
     command error_t Init.init(void)
     {
         call rds_debug.makeOutput(0xFF);
-        call debug_out_2.makeOutput(0xFF);
-        call debug_out_3.makeOutput(0xFF);
 
         call Interrupt_Pin.makeInput();
         call Reset_Pin.makeOutput();
@@ -134,8 +130,6 @@ implementation
         if(init_state_temp != FM_CLICK_READY ||
            current_operation_temp != FM_CLICK_IDLE)
         {
-            call debug_out_2.clear(0xFF);
-            call debug_out_2.set(current_operation_temp);
 
             return FAIL;
         }
@@ -219,10 +213,6 @@ implementation
         return SUCCESS;
     }
 
-    error_t I2C_get(void)
-    {
-        
-    }
 
     // send config
     void task write_conf_to_chip_task()
@@ -790,7 +780,8 @@ implementation
                             channel |= conf_registers.channel.CHANNEL_L;
 
                             signal FMClick.tuneComplete(channel);
-                        }                        
+                        }        
+                        post reset_rds_task();
                     }
                     else
                     {
@@ -817,6 +808,7 @@ implementation
                         channel |= conf_registers.channel.CHANNEL_L;
 
                         signal FMClick.tuneComplete(channel);
+                        post reset_rds_task();
                     }
                     else
                     {
@@ -842,6 +834,14 @@ implementation
                 default:
                     break;
             }
+    }
+
+    void task reset_rds_task()
+    {
+        rds_radio_text[0]='\0';
+        current_rds_text_index=0;
+        rds_radio_station[0] = '\0';
+        current_rds_station_index = 0;
     }
 
     void decode_radio_text(void)

@@ -2,7 +2,7 @@
 #include <string.h>
 #include <avr/pgmspace.h>
 
-#define SCROLL_PERIOD_MS 1500
+#define SCROLL_PERIOD_MS 1000
 #define VOLUME_SAMPLE_PERIOD_MS 100
 #define DATETIME_TIMER_MINUTE_MS 60000L
 #define VOLUME_SAMPLE_ARRAY_SIZE 5
@@ -1024,7 +1024,7 @@ implementation {
 
 	event void Database.savedChannel(uint8_t id, uint8_t result)
     {
-
+        // Don't care, only local representation is necessary
     }
 
     void update_displays(void)
@@ -1192,6 +1192,15 @@ implementation {
                 }
             }
 
+            if(found && fav_pos == 0)
+            {
+                atomic
+                {
+                    current_display_state = DISPLAY_FREE;
+                }
+                return;
+            }
+
             ch_info.quickDial = fav_pos;
             scan_list[i] = channel;
 
@@ -1211,7 +1220,7 @@ implementation {
                 {
                     for(i=0; i< SCAN_LIST_SIZE;i++)
                     {
-                        if(scan_list[i] == channel)
+                        if(scan_list[i] == favorite_list[fav_pos])
                         {
                             ch_info.quickDial = 0;
                             call Database.saveChannel(i, ch_pointer);

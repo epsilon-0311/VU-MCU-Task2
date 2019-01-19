@@ -3,7 +3,9 @@
 #include "string.h"
 #include <avr/pgmspace.h>
 
-#define MAX_ENTRIES 16
+#define NOTE_LENGTH 40
+#define STATION_LENGTH 8
+#define MAX_ENTRIES 15
 #define MAX_FAVORITES 9
 
 module DatabaseP{
@@ -17,7 +19,6 @@ module DatabaseP{
     uses interface Queue<Database_operation_t> as OpQueue;
     uses interface Pool<udp_msg_t> as MsgPool;
 
-    uses interface GeneralIOPort as debug_out_3;
     uses interface BufferedLcd;
 
 
@@ -36,7 +37,6 @@ implementation {
     void task retrieve_list_data_task();
 
     in_addr_t destination = { .bytes {DESTINATION}};
-    /* Database_operation_t current_op; */
 
     const char PROGMEM error_string[] = "err\r";
     const char PROGMEM ok_string[] = "ok\r";
@@ -216,8 +216,7 @@ implementation {
     command void Database.saveChannel(uint8_t id, channelInfo *channel)
     {
         char message[MAX_MSG_LEN];
-        /* char station[9];
-        strcpy(station, channel->name); */
+        uint8_t len;
 
         if(id == 0xFF)
         {
@@ -230,7 +229,7 @@ implementation {
 
             strcpy_P(message, update_format_string);
             strcat_P(message, radio_info_key_id);
-
+            
             itoa (id,id_buffer,10);
             strcat(message, id_buffer);
             strcat(message, ",");
@@ -250,13 +249,13 @@ implementation {
         if(strlen(channel->name) > 0)
         {
             uint8_t i=strlen(channel->name);
-            strcat_P(message, radio_info_key_name);
+            strncat_P(message, radio_info_key_name, STATION_LENGTH);
 
-            for(; i<8; i++)
+            for(; i<STATION_LENGTH; i++)
             {
                 channel->name[i] = ' ';
             }
-            channel->name[8] = '\0';
+            channel->name[STATION_LENGTH] = '\0';
 
             strcat(message, channel->name);
 
@@ -276,11 +275,20 @@ implementation {
         //has to be last entry
         if(strlen(channel->notes) > 0)
         {
-            strcat_P(message, radio_info_key_note);
+            strncat_P(message, radio_info_key_note, NOTE_LENGTH);
             strcat(message, channel->notes);
         }
+        
+        len = strlen(message);
+        if(message[len-1] == ',')
+        {
+            message[len-1] = '\n';
+        }
+        else
+        {
+            strcat(message,"\n");
+        }
 
-        strcat(message, "\n");
         enqueueMsg(message);
         post send_task();
     }
